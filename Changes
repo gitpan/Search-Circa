@@ -1,0 +1,21 @@
+Revision history for Perl extension Circa.
+
+Circa is a merge between Circa::Indexer and Circa::Search.
+Before this release, last release of Circa::Indexer is 1.8 and 
+Circa::Search is 1.5 (In this release, version is 1.20 and 1.11)
+
+So I use some common code in Circa.pm, split other code in Url.pm, 
+Categorie.pm and Parser.pm
+
+Revision 1.5  2001/06/02 08:18:26  alian
+	First release of Circa as one package
+
+Revision 1.6  2001/08/05 20:36:10  alian
+	- Remove some bugs
+	- Add verbose message when can't connect
+
+Revision 1.7 2001/08/24 13:37:56 alian
+	- Add Annuaire.pm package for manage directory
+
+Revision 1.8 2001/08/29 16:18:08 alian
+	- Manage a new namespace Search::Circa
