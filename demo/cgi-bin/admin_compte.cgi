@@ -2,7 +2,7 @@
 #
 # Simple CGI interface to module Search::Circa::Indexer
 # Copyright 2000 A.Barbet alian@alianwebserver.com.  All rights reserved.
-# $Date: 2001/08/29 17:47:50 $
+# $Date: 2001/10/28 13:54:04 $
 #
 
 use strict;
@@ -21,7 +21,7 @@ my $masque_stats       = $CircaConf::TemplateDir."/admin_compte_stats.htm";
 my $masque_valide      = $CircaConf::TemplateDir."/admin_compte_valide.htm";
 my $masque2            = $CircaConf::TemplateDir."/admin_url.htm";
 my $masque;
-my $indexor = new Search::Circa::Indexer;
+my $indexor = new Search::Circa::Indexer(%CircaConf::conf);
 my $cgi=new CGI;
 print header;
 
@@ -104,7 +104,11 @@ elsif (param('rename_categorie'))
   }
 elsif (param('deplace_categorie'))
   {
-    $indexor->categorie->move($compte,param('id1'),param('id2'));
+    if (param('deplace_categorie') eq 'Deplace')
+	{ $indexor->categorie->move($compte,param('id1'),param('id2')); }
+    else { $indexor->categorie->move_categorie($compte,
+							     param('id1'),
+							     param('id2')); }
     print h3("Catégorie deplacée");
   }
 elsif (param('personalise_categorie'))

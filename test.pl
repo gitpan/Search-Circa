@@ -51,3 +51,28 @@ print "ok ",$n++,"\n";
 # (correspondingly "not ok 13") depending on the success of chunk 13
 # of the test code):
 
+sub check_url
+  {
+    my %url =
+	{
+	 'url'              => 'http://localhost',
+	 'local_url'        => 'file://usr/local/apache/htdocs',
+	 'browse_categorie' => '1',
+	 'niveau'           => '0',
+	 'categorie'        => '0',
+	 'titre'            => 'page test',
+	 'description'      => 'une page de test',
+	 'langue'           => 'fr',
+	 'last_check'       => '0000-00-00',
+	 'last_update'      => '0000-00-00',
+	 'valide'           => 1,
+	 'parse'            => 0
+	};
+    $url{'id'} = $circa->url->save(%url);
+    if (!$url{'id'}) { print "not ok 8\n"; }
+    else { print "ok 8\n" }
+    $url{'niveau'} = 1;
+    if (!$circa->url->update(%url)) { print "not ok 9\n"; }
+    else { print "ok 9\n"; }
+#    if ($circa->url->load($url{'id'}))
+  }

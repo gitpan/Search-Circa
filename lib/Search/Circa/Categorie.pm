@@ -4,6 +4,9 @@ package Search::Circa::Categorie;
 # Copyright 2000 A.Barbet alian@alianwebserver.com.  All rights reserved.
 
 # $Log: Categorie.pm,v $
+# Revision 1.11  2001/10/28 12:22:37  alian
+# - Ajout de la methode move_categorie
+#
 # Revision 1.10  2001/08/29 16:23:47  alian
 # - Add get_liste_categorie_fils routine
 # - Update POD documentation for new namespace
@@ -45,7 +48,7 @@ require Exporter;
 
 @ISA = qw(Exporter);
 @EXPORT = qw();
-$VERSION = ('$Revision: 1.10 $ ' =~ /(\d+\.\d+)/)[0];
+$VERSION = ('$Revision: 1.11 $ ' =~ /(\d+\.\d+)/)[0];
 
 #------------------------------------------------------------------------------
 # new
@@ -119,6 +122,17 @@ sub move
   my ($this,$compte,$id1,$id2)=@_;
   $this->{DBH}->do("update ".$this->{INDEXER}->pre_tbl.$compte."links ".
 		   "set categorie=$id2 where categorie = $id1")
+    || print STDERR "Erreur:$DBI::errstr<br>\n";
+  }
+
+#------------------------------------------------------------------------------
+# move_categorie
+#------------------------------------------------------------------------------
+sub move_categorie
+  {
+  my ($this,$compte,$id1,$id2)=@_;
+  $this->{DBH}->do("update ".$this->{INDEXER}->pre_tbl.$compte."categorie ".
+		   "set parent=$id2 where parent = $id1")
     || print STDERR "Erreur:$DBI::errstr<br>\n";
   }
 
@@ -293,7 +307,7 @@ This module provide several function to manage categorie of Circa.
 
 =head1 VERSION
 
-$Revision: 1.10 $
+$Revision: 1.11 $
 
 =head1 Public Class Interface
 
@@ -327,6 +341,10 @@ Renomme la categorie $id pour le compte $compte en $nom
 =item move($compte,$id1,$id2)
 
 Move url for account $compte from one categorie $id1 to another $id2
+
+=item move_categorie($compte,$id1,$id2)
+
+Move categories for account $compte from one categorie $id1 to another $id2
 
 =item get_liste($id,$cgi)
 

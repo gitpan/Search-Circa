@@ -1,50 +1,7 @@
 package Search::Circa::Url;
 
-# module Circa::Url : See Circa::Indexer
+# module Circa::Url : Manage url of Circa. See Search::Circa
 # Copyright 2000 A.Barbet alian@alianwebserver.com.  All rights reserved.
-
-# $Log: Url.pm,v $
-# Revision 1.12  2001/10/14 17:18:20  alian
-# - Mise à jour de la methode Update pour qu'elle retourne 0/1 suivant le
-# resultat de la requete
-#
-# Revision 1.11  2001/08/26 23:08:32  alian
-# - Update POD documentation
-#
-# Revision 1.10  2001/08/24 13:37:56  alian
-# - Ajout du prefix Search:: devant chacun des modules
-#
-# Revision 1.9  2001/08/01 19:41:44  alian
-# - Remove 2 warnings in update method
-#
-# Revision 1.8  2001/05/22 10:24:55  alian
-# - Update for new architecture
-#
-# Revision 1.7  2001/05/21 22:34:27  alian
-# - Add load method
-#
-# Revision 1.6  2001/05/20 11:24:00  alian
-# - Change add and update method: use a hash as parameter
-# - Add liens method
-# - Update POD documentation
-#
-# Revision 1.5  2001/05/15 22:58:52  alian
-# - Add NeedParser and NeedUpdate
-#
-# Revision 1.4  2001/05/15 22:12:41  alian
-# - Ajout fonctionnalité valid_all_url et delete_all_non_valid
-#
-# Revision 1.3  2001/05/15 21:35:10  alian
-# - Correct error in non_valide
-#
-# Revision 1.2  2001/05/14 23:23:28  alian
-# - Update POD documentation
-# - Add non_valide method
-#
-# Revision 1.1  2001/05/14 14:59:02  alian
-# - Code retiré de Indexer.pm
-#
-#
 
 use strict;
 use DBI;
@@ -53,7 +10,7 @@ require Exporter;
 
 @ISA = qw(Exporter);
 @EXPORT = qw();
-$VERSION = ('$Revision: 1.12 $ ' =~ /(\d+\.\d+)/)[0];
+$VERSION = ('$Revision: 1.14 $ ' =~ /(\d+\.\d+)/)[0];
 
 
 #------------------------------------------------------------------------------
@@ -94,8 +51,9 @@ sub add
     $requete.= ",browse_categorie ='$url{browse_categorie}'" 
       if ($url{browse_categorie});
     #print $requete,"<br>\n";
-    $self->{DBH}->do($requete) || return 0; 
-    if ($DBI::errstr) { print $DBI::errstr,"\n"; return 0; }
+    $self->{DBH}->do($requete); 
+    if ($DBI::errstr) 
+	{ $self->{INDEXER}->trace(3, $DBI::errstr."\n"); return 0; }
     return 1;
   }
 
@@ -118,15 +76,19 @@ sub update
   $requete.= "parse            = '$url{parse}',"       if ($url{parse});
   $requete.= "valide           = $url{valide},"        if ($url{valide});
   $requete.= "niveau           = $url{niveau},"        if ($url{niveau});
-  $requete.= "last_check       = $url{last_check},"  if ($url{last_check});
-  $requete.= "last_update      = '$url{last_update}'"  if ($url{last_update});
+  $requete.= "last_check       = '$url{last_check}',"  
+    if ($url{last_check});
+  $requete.= "last_update      = '$url{last_update}',"  
+    if ($url{last_update});
   $requete.= "browse_categorie ='$url{browse_categorie}'," 
     if ($url{browse_categorie});
+  if ($requete=~/,$/) { chop($requete); }
   $requete.="  where id=$url{id}"; 
   #print $requete;
-  $self->{DBH}->do($requete) || return 0;
+  $self->{DBH}->do($requete);
+  if ($DBI::errstr) { print $DBI::errstr,"\n"; return 0; }
   return 1;
-  }
+}
 
 #------------------------------------------------------------------------------
 # load
@@ -323,7 +285,7 @@ Search::Circa::Url - provide functions to manage url of Circa
 
 =head1 VERSION
 
-$Revision: 1.12 $
+$Revision: 1.14 $
 
 =head1 SYNOPSIS
 

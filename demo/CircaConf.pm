@@ -4,7 +4,7 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
 require Exporter;
 @ISA = qw(Exporter);
 @EXPORT = qw();
-$VERSION = ('$Revision: 1.3 $ ' =~ /(\d+\.\d+)/)[0];
+$VERSION = ('$Revision: 1.4 $ ' =~ /(\d+\.\d+)/)[0];
 
 #-------- A MODIFIER --------#
 
@@ -30,4 +30,18 @@ $CircaConf::export = "/home/alian/tmp";
 # Repertoire des librairies de Circa si non installe par root
 $CircaConf::CircaDir = "/home/alian/circa";
 
+# some values ...
+%CircaConf::conf=
+  (
+   'author'            => 'circa@alianwebserver.com', # Responsable du moteur
+   'temporate'         => 0,  # Temporise les requetes sur le serveur de 8s.
+   'facteur_keyword'   => 15, # <meta name="KeyWords"
+   'facteur_description'  => 10, # <meta name="description"
+   'facteur_titre'     => 10, # <title></title>
+   'facteur_full_text' => 1,  # reste
+   'facteur_url'       => 10,
+   'nb_min_mots'       => 2,  # facteur min pour garder un mot
+   'niveau_max'        => 7,  # Niveau max à indexer
+   'indexCgi'          => 0  # follow link for CGI (ex: ?nom=toto&riri=eieiei
+   );
 # Fin

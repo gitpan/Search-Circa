@@ -4,6 +4,12 @@ package Search::Circa::Indexer;
 # Copyright 2000 A.Barbet alian@alianwebserver.com.  All rights reserved.
 
 # $Log: Indexer.pm,v $
+# Revision 1.28  2001/10/28 15:51:11  alian
+# - Add exportId (one account) feature
+#
+# Revision 1.27  2001/10/27 20:50:25  alian
+# Correct bug for local url
+#
 # Revision 1.26  2001/10/07 12:04:03  alian
 # - Prise en compte du host pour l'import/export
 #
@@ -13,50 +19,6 @@ package Search::Circa::Indexer;
 # Revision 1.24  2001/08/29 17:45:32  alian
 # - Correction d'un bug lors de l'affichage d'erreur Mysql dans
 # get_liste_liens
-#
-# Revision 1.23  2001/08/29 16:22:06  alian
-# - Remove a & in header_compte
-# - Get down size of url in Get_liste_liens
-#
-# Revision 1.22  2001/08/24 13:39:18  alian
-# - Ajout du prefix Search:: devant le nom du module
-#
-# Revision 1.21  2001/08/01 19:41:11  alian
-# - Add return code for method connect : now you'll see if Indexer can connect
-# or not
-#
-# Revision 1.20  2001/05/28 18:41:18  alian
-# - Move Parser method from Circa.pm to Indexer.pm
-#
-# Revision 1.19  2001/05/23 10:34:01  alian
-# - Remove some close_connect call in export/import method
-#
-# Revision 1.18  2001/05/21 22:47:40  alian
-# - Remove some method use in Search and Indexer and build a father class : Circa.pm
-#
-# Revision 1.17  2001/05/20 12:12:43  alian
-# - Use new URL->update and URL->add signature
-#
-# Revision 1.16  2001/05/15 23:01:14  alian
-# - Use need_parser,  need_update and a_valider
-#
-# Revision 1.15  2001/05/14 23:25:42  alian
-# - Use Circa::Url::non_valide method
-# - Use /usr/bin/ before /usr/local/bin/ in export/import
-#
-# Revision 1.14  2001/05/14 22:14:32  alian
-# - Update POD documentation
-# - Correct bug in update routine
-#
-# Revision 1.13  2001/05/14 18:10:50  alian
-# - Move POD documentation at end of file
-# - Split code into multiple modules : Url, Categorie, Parser
-#
-# Revision 1.12  2001/03/31 19:07:40  alian
-# - Update import and export functions: trouble with parameters,
-# and add some control about file read/write
-# - Update update method: use local url if present
-# - Update set_agent call and usage
 
 use strict;
 use DBI;
@@ -68,7 +30,7 @@ require Exporter;
 
 @ISA = qw(Exporter Search::Circa);
 @EXPORT = qw();
-$VERSION = ('$Revision: 1.26 $ ' =~ /(\d+\.\d+)/)[0];
+$VERSION = ('$Revision: 1.28 $ ' =~ /(\d+\.\d+)/)[0];
 
 ########## CONFIG  ##########
 my %ConfigMoteurDefault=(
@@ -100,7 +62,8 @@ sub new
     if (@_)
       {
 	my %vars =@_;
-	while (my($n,$v)= each (%vars)) {$self->{'ConfigMoteur'}->{$n}=$v;}
+	while (my($n,$v)= each (%vars)) 
+		{$self->{'ConfigMoteur'}{$n}=$v;}
       }
     return $self;
   }
@@ -145,12 +108,13 @@ sub host_indexed
 #------------------------------------------------------------------------------
 sub set_host_indexed
   {
-  my $this=shift;
-  my $url=$_[0];
-  if ($url=~/^(http:\/\/.*?)\/$/) {$this->host_indexed($1);}
-  elsif ($url=~/^(http:\/\/.*?)\/[^\/]+$/) {$this->host_indexed($1);}
-  elsif ($url=~/^(file:\/\/\/[^\/]*)\//) {$this->host_indexed($1);}
-  else {$this->host_indexed($url);}
+    my $this=shift;
+    my $url=$_[0];
+    $this->trace(5, "Circa::Indexer::set_host_indexed $url");
+    if ($url=~/^(http:\/\/.*?)\/$/) {$this->host_indexed($1);}
+    elsif ($url=~/^(http:\/\/.*?)\/[^\/]+$/) {$this->host_indexed($1);}
+    elsif ($url=~/^(file:\/\/\/[^\/]*)\//) {$this->host_indexed($1);}
+    else {$this->host_indexed($url);}
   }
 
 #------------------------------------------------------------------------------
@@ -204,6 +168,9 @@ sub addLocalSite
   {
     my ($self,$url,$email,$titre,$local_url,$path,$urlRacine,
 	$categorieAuto,$cgi,$rep,$file)=@_;
+    if ($#_<7) 
+	{ die "Usage Circa::Indexer::addLocalSite(>=8 args):\n".
+	    "\tUrl, Email, Titre, local url, path, url racine, categorieAuto\n";}
     if ($cgi)
       {
 	$file=$cgi->param('file');
@@ -219,14 +186,17 @@ sub addLocalSite
               insert into ".$self->pre_tbl."responsable
                   (email,titre,categorieAuto) 
               values('$email','$titre',$categorieAuto)");
-    $sth->execute;
+    $sth->execute || print "Erreur: $DBI::errstr<br>\n";
     $sth->finish;
     my $id = $sth->{'mysql_insertid'};
     $self->{DBH}->do("insert into ".$self->pre_tbl."local_url 
-                      values($id,'$urlRacine','$path');");
+                      values($id,'$path','$urlRacine');");
     $self->create_table_circa_id($sth->{'mysql_insertid'});
-  $self->URL->add($id,(url=> $url, local_url => $local_url, valide=>1)) 
-    || print "Erreur: $DBI::errstr<br>\n";
+    $self->URL->add($id,(url      => $url, 
+				 urllocal => $local_url, 
+				 valide   => 1))
+	|| print "Erreur: $DBI::errstr<br>\n";
+    return $id;
   }
 
 #------------------------------------------------------------------------------
@@ -418,10 +388,13 @@ CREATE TABLE ".$self->pre_tbl.$id."stats (
 #------------------------------------------------------------------------------
 sub export
   {
-  my ($self,$dump,$path)=@_;
+  my ($self,$dump,$path,$id)=@_;
   my ($pass, $file, $host, $user);
   if (!$path) {use Cwd;$path=cwd;}
-  $file=$path."/circa.sql";$file=~s/\/\//\//g;
+  $file=$path."/circa";
+  $file.=$id unless !$id;
+  $file.=".sql";
+  $file=~s/\/\//\//g;
   if ( (! -w $path) || ( ( -e $file) && (!-w $file)))  
     {$self->close; die "Can't create $file (not enough rights ?):$!\n";}
   if ( (!$dump) || (! -x $dump))
@@ -433,8 +406,10 @@ sub export
     }
   if ((-e $file) && (!(unlink $file))) 
 	{ $self->close; die "Can't unlink $file:$!\n";}
+
   my (@t,@exec);
   my $requete = "select id from ".$self->pre_tbl."responsable";
+  $requete.= " where id = $id" unless (!$id);
   my $sth = $self->{DBH}->prepare($requete);
   $sth->execute;
   while (my ($id)=$sth->fetchrow_array) {push(@t,$id);}
@@ -443,25 +418,31 @@ sub export
   else {$pass=' ';}
   if ($self->{_HOST}) {$host=" -h".$self->{_HOST}.' ';}
   else {$host=' ';}
-  push(@exec,$dump." --add-drop-table -u".$self->{_USER}.
-	 $pass.$host.$self->{_DB}." ".$self->pre_tbl."responsable >> $file");
-  push(@exec,$dump." --add-drop-table  -u".$self->{_USER}.
-	 $pass.$host.$self->{_DB}." ".$self->pre_tbl."local_url >> $file");
-  push(@exec,$dump." --add-drop-table  -u".$self->{_USER}.
-	 $pass.$host.$self->{_DB}." ".$self->pre_tbl."inscription >> $file");
+  my $option = " --add-drop-table -u".$self->{_USER}.
+    $pass.$host.$self->{_DB}." ".$self->pre_tbl;
+
+  if (!$id)
+    {
+	push(@exec,$dump.$option."responsable >> $file");
+	push(@exec,$dump.$option."local_url   >> $file");
+	push(@exec,$dump.$option."inscription >> $file");
+    }
+
   foreach my $id (@t)
     {
-    push(@exec,$dump." --add-drop-table -u".$self->{_USER}.
-	   $pass.$host.$self->{_DB}." ".$self->pre_tbl.$id."categorie >> $file");
-    push(@exec,$dump." --add-drop-table -u".$self->{_USER}.
-	   $pass.$host.$self->{_DB}." ".$self->pre_tbl.$id."links >> $file");
-    push(@exec,$dump." --add-drop-table -u".$self->{_USER}.
-	   $pass.$host.$self->{_DB}." ".$self->pre_tbl.$id."relation >> $file");
-    #push(@exec,$dump." --add-drop-table -u".$self->{_USER}.$pass.$self->{_DB}." ".$self->pre_tbl.$id."stats >> $file");
+	my $opt = $option.$id;
+	push(@exec,$dump.$opt."categorie  >> $file");
+	push(@exec,$dump.$opt."links      >> $file");
+	push(@exec,$dump.$opt."relation   >> $file");
     }
   $|=1;
   print "En cours d'export ...";
-  foreach (@exec) {system($_) ==0 or print "Fail:$?-$!\n";}
+  $self->trace(2," ");
+  foreach (@exec) 
+    {
+	$self->trace(2,"\t$_");
+	system($_) ==0 or print "Fail:$?-$!\n";
+    }
   print "$file done.\n";
   }
 
@@ -952,7 +933,7 @@ grow to one. So if < to $Config{'niveau_max'}, url is added.
 
 =head1 VERSION
 
-$Revision: 1.26 $
+$Revision: 1.28 $
 
 =head1 Class Interface
 
@@ -1047,7 +1028,7 @@ Create account for url $url. Return id of account created.
 =item addLocalSite($url,$email,$titre,$local_url,$path,
                    $urlRacine,$categorieAuto,$cgi,$rep,$file);
 
-Add a local $url
+Add a local $url.Return id of account on success, undef else.
 
 =item parse_new_url($idp)
 

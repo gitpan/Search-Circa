@@ -23,6 +23,7 @@ demo/images/circa_logo1.gif
 demo/images/circa_logo2.gif
 demo/admin.pl
 demo/search.pl
+demo/annuaire.pl
 demo/CircaConf.pm
 demo/INSTALL
 demo/index.en.html
@@ -32,3 +33,4 @@ lib/Search/Circa/Indexer.pm
 lib/Search/Circa/Search.pm
 lib/Search/Circa/Categorie.pm
 lib/Search/Circa/Parser.pm
+lib/Search/Circa/Annuaire.pm

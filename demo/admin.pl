@@ -2,7 +2,7 @@
 #
 # Simple perl example to interface with module Search::Circa::Indexer
 # Copyright 2000 A.Barbet alian@alianwebserver.com.  All rights reserved.
-# $Date: 2001/10/14 17:33:48 $
+# $Date: 2001/10/28 15:51:11 $
 #
 
 use strict;
@@ -11,25 +11,13 @@ use CircaConf;
 use lib $CircaConf::CircaDir;
 use Search::Circa::Indexer;
 
-my $indexor = new Search::Circa::Indexer(
-  'author'              => 'circa@alianwebserver.com', # Responsable du moteur
-  'temporate'           => 1,  # Temporise les requetes sur le serveur de 8s.
-  'facteur_keyword'     => 15, # <meta name="KeyWords"
-  'facteur_description' => 10, # <meta name="description"
-  'facteur_titre'       => 10, # <title></title>
-  'facteur_full_text'   => 1,  # reste
-  'facteur_url'         => 10,
-  'nb_min_mots'         => 3,  # facteur min pour garder un mot
-  'niveau_max'          => 7,  # Niveau max à indexer
-  'indexCgi'            => 0,  # Suit les différents liens des CGI 
-					 # (ex: ?nom=toto&riri=eieiei)
-);
+my $indexor = new Search::Circa::Indexer(%CircaConf::conf);
 #$indexor->proxy('http://195.154.155.254:3128');
 if ( (@ARGV==0) || ($ARGV[0] eq '-h')) {&usage();}
   
 
 my ($create, $drop, $update, $parse_new, $add, $addSite, $addLocal, $stats,
-    $export, $import, $depth, $drop_id, $debug);
+    $export, $import, $depth, $drop_id, $debug, $addLocalPrompt, $exportId);
 GetOptions 
   (
    "create"      => \$create,
@@ -40,8 +28,10 @@ GetOptions
    "add_site=s"  => \$add,
    "add=s"       => \$addSite,
    "addLocal=s"  => \$addLocal,
+   "addLocalPrompt" => \$addLocalPrompt,
    "stats=s"     => \$stats,
    "export"      => \$export,
+   "exportId=s"  => \$exportId,
    "import"      => \$import,
    "drop_id=s"   => \$drop_id,
    "debug=s"     => \$debug);
@@ -80,6 +70,27 @@ if ($addLocal)
   $indexor->addLocalSite(@l);
   print "Url $l[0] added\n";
   }
+# Add local site with prompt
+if ($addLocalPrompt)
+  {
+    my @l;
+    push(@l, $indexor->prompt("Url http ?",
+					"http://www.alianwebserver.com/index.html"));
+    push(@l, $indexor->prompt("Email responsable ?",'root@localhost'));
+    push(@l, $indexor->prompt("Titre site ?",'titre de mon site'));
+    push(@l, $indexor->prompt("Url local ?",
+					"file:///usr/local/apache/htdocs/index.html"));
+    my $v = 'file:///usr/local/apache/htdocs/';
+    if ($l[3] =~/^(.*\/)[\w\.]*/) {$v=$1; }
+    push(@l, $indexor->prompt("Url local racine ?", $v));
+    $v = 'http://www.alianwebserver.com/';
+    if ($l[0]=~/^(.*\/)[\w\.]*/) {$v=$1; }
+    push(@l, $indexor->prompt("Url http racine ?",$v));
+    push(@l, $indexor->prompt("Categorie automatique ?",1));
+    my $id = $indexor->addLocalSite(@l);
+    print "Url $l[0] added and account $id created\n";
+  }
+
 
 # Update index
 if ($update) 
@@ -118,6 +129,9 @@ Profondeur $depth : $nbIndexe pages indexées, $nbAjoute pages ajoutées, ".
 
 # export data
 if ($export) {$indexor->export;}
+
+# export data for one account
+if ($exportId) {$indexor->export(undef,undef,$exportId);}
 
 # import data
 if ($import) {$indexor->import_data;}
@@ -162,65 +176,37 @@ sub display
 sub usage
   {
 print <<EOF;
-******************************************************************
+*******************************************************************************
             Circa Indexer version $Search::Circa::Indexer::VERSION
 
-Usage: admin.pl [-h] [+create] [+drop] [+export] [+import]
-  [+update=nb_day,id_site] [+stats=id_site]  [+drop_id=id]
-  [+parse_new=id_site] [+add=url, [email], [titre], [masque] ]
-  [+add_site=url [,id] ] [+debug=(1-4)] 
-  [+addLocal=file,url,email,titre,urlRacine,pathRacine]
+Usage: admin.pl OPTIONS
 
-******************************************************************
-EOF
+OPTIONS are:
 
-if (@ARGV>0)
-  {
-print <<EOF;
--------
-+create: Create table for Circa
--------
-+drop : Drop table for Circa (All Mysql data lost !)
--------
-+drop_id=id : Drop table for account id
--------
-+export : Export all data in circa.sql
--------
-+import : Import data from circa.sql
--------
-+stats=id : Give some stat about site id
--------
-+parse_new=id [+depth_max]: Parse and indexe url last added for site id
--------
-+add_site=url [,id] : Add url in account id. If no id, 1 is used.
--------
-+update=nb_day,id : Update data for site id last indexed nb_day ago
-  If page aren't updated since last index, page not fetched.
--------
-+add=url, [email], [titre], [template] : Add url to database and
-create a new account.
+  [+create] Create needed table for Circa
+  [+drop] Drop table for Circa (All Mysql data lost !)
+  [+export] Export all data in circa.sql
+  [+exportId=id] Export data for account id in circa_id.sql
+  [+import] Import data from circa.sql
+  [+drop_id=id] Drop table for account id
 
-$0 +add=http://www.alianwebserver.com/,
-              alian\@alianwebserver.com,
-              "Alian Web Server",
-              "/home/alian/circa/circa.htm"
--------
-+addLocal=url,email,titre,file,urlRacine,pathRacine :
-Add a local url to database and create a new account.
+  [+add=url, [email], [titre], [masque] ] : Create account for url
+  [+add_site=url [,id] ] Add url in account id. If no id, 1 is used.
+  [+addLocalPrompt] : Add a local account (params are asked)
+  [+addLocal=file,url,email,titre,urlRacine,pathRacine,categorieAuto]
 
-Ex: $0 +addLocal=http://www.alianwebserver.com/index.html,
-           alian\@alianwebserver.com,
-           "Alian Web Server",
-           file:///suse/index.html,
-           file:///suse/,
-           http://www.alianwebserver.com
--------
+  [+parse_new=id_account] Parse and indexe url last added for account id
+  [+update=nb_day,id] Update url for account id last indexed nb_day ago
+
+  [+stats=id_account] Give some stat about account id
+  [+debug=(1-4)] Verbose level
+
+*******************************************************************************
 
 If first time you use Circa, you can do:
 $0 +create +add=http://www.monsite.com +parse_new=1 +depth_max
 for index your first url.
 
 EOF
-  }
   exit;
 }

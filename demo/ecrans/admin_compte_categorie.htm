@@ -83,6 +83,15 @@ TD {}
         </p>
       </form>
       <form>
+        <h2>D&eacute;placer des categories</h2>
+        <p>De <? $categorie1 ?>
+          <input type="hidden" name="compte" value="<? $id ?>">
+          <input type="hidden" name="ecran_categorie" value="1">
+          vers <? $categorie2 ?>
+          <input type="submit" name="deplace_categorie" value="DeplaceCat">
+        </p>
+      </form>
+      <form>
         <h2>Supprimer une cat&eacute;gorie</h2>
         <p>
           <input type="hidden" name="compte" value="<? $id ?>">

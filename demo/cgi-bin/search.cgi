@@ -2,7 +2,7 @@
 #
 # Simple CGI interface to module Search::Circa::Search
 # Copyright 2000 A.Barbet alian@alianwebserver.com.  All rights reserved.
-# $Date: 2001/08/29 17:47:50 $
+# $Date: 2001/10/28 16:27:22 $
 
 use strict;
 use CGI qw/:standard :html3 :netscape escape unescape/;
@@ -33,27 +33,29 @@ if ( param('word') )
     my $mots=param('word');
     my $first = param('first') ||0;
     my ($masque) = $search->categorie->get_masque($id) || $masque;
-    my ($resultat,$links,$indice) = $search->search(
-								    undef,$mots,$first,
-								    param('id')||1,
-								    param('langue')||undef,
-								    param('url')||undef,
-								    param('create')||undef,
-								    param('update')||undef,
-								    param('categorie')||undef,
-								    $cgi
-								   );
+    my ($resultat,$links,$indice) = $search->search
+	(
+	 undef,$mots,$first,
+	 param('id')        || 1,
+	 param('langue')    || undef,
+	 param('url')       ||undef,
+	 param('create')    ||undef,
+	 param('update')    ||undef,
+	 param('categorie') ||undef,
+	 $cgi
+	);
   if ($indice==0) {$resultat="<p>Aucun document trouvé.</p>";}
   if ($indice!=0) {$indice="$indice page(s) trouvée(s)";} else {$indice=' ';}
   # Liste des variables à substituer dans le template
-  my %vars = ('resultat'     => $resultat,
-            'titre'    => "Recherche sur ".$search->get_name_site($id),
-            'listeLiensSuivPrec'=> $links,
-            'words'    => param('word'),
-            'id'    => param('id'),
-            'categorie'    => param('categorie')||0,
-            'listeLangue'  => $search->get_liste_langue($cgi),
-            'nb'    => $indice);
+  my %vars = 
+    ('resultat'     => $resultat,
+     'titre'        => "Search::Circa release $Search::Circa::VERSION",
+     'listeLiensSuivPrec'=> $links,
+     'words'    => param('word'),
+     'id'    => param('id'),
+     'categorie'    => param('categorie')||0,
+     'listeLangue'  => $search->get_liste_langue($cgi),
+     'nb'    => $indice);
     # Affichage du resultat
     print $search->fill_template($masque,\%vars),end_html;
     $search->close;
@@ -62,17 +64,15 @@ if ( param('word') )
 else
   {    
     my $annuaire = new Search::Circa::Annuaire;
+    #$annuaire->{DEBUG}=5;
     # Connection à MySQL
     if (!$annuaire->connect($CircaConf::User,
 				    $CircaConf::Password,
 				    $CircaConf::Database,
 				    $CircaConf::Host))
 	{die "Erreur à la connection MySQL:$DBI::errstr\n";}
-    my ($categorie,$id);
-    if (!param('categorie')) {$categorie=0;}
-    else {$categorie=param('categorie');}
-    if (!param('id')) {$id=1;}
-    else {$id=param('id');}
+    my $categorie = param('categorie') || 0;
+    my $id = param('id') || 1;
     my ($masque) = $annuaire->categorie->get_masque($id,$categorie) || $masque;
     my ($titre,@cates) = $annuaire->GetCategoriesOf($categorie,$id);
     my ($sites,$liens) = $annuaire->GetSitesOf($categorie,
@@ -85,8 +85,8 @@ else
 	 'categories1' => join(' ',@cates[0..$#cates/2]),
 	 'categories2' => join(' ',@cates[($#cates/2)+1..$#cates]),
 	 'titre'       => h3('Annuaire').'<p class="categorie">'.($titre).'</p>',
-	 'listeLiensSuivPrec'=> $liens,
-	 'words'       => ' ',
+	 'listeLiensSuivPrec'=> undef,
+	 'words'       => undef,
 	 'categorie'   => $categorie,
 	 'id'          => $id,
 	 #     'listeLangue' => $search->get_liste_langue($cgi),

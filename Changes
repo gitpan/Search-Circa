@@ -7,21 +7,32 @@ Circa::Search is 1.5
 So I use some common code in Circa.pm, split other code in Url.pm, 
 Categorie.pm and Parser.pm
 
-Revision 1.5  2001/06/02 08:18:26  alian
-	- First release of Circa as one package
+Release 1.11 2001/10/28 14:14:25 2001 alian
+	- Add faq in Circa pod documentation
+	- New parameter in CircaConf: hash %conf used by all scripts
+	- Add Annuaire package and annuaire.pl script to manage directory
+	- Search: Remove warning when print root categorie
+	- Indexer : 
+		- Add method move_categorie in Categorie to move categorie from one
+		to another
+		- Correct bug with url indexing with file://
+		- New interface for admin.pl
 
-Revision 1.6  2001/08/05 20:36:10  alian
-	- Remove some bugs
-	- Add verbose message when can't connect
-
-Revision 1.7 2001/08/24 13:37:56 alian
-	- Add Annuaire.pm package for manage directory
-
-Revision 1.8 2001/08/29 16:18:08 alian
-	- Manage a new namespace Search::Circa
-
-Revision 1.9 2001/10/14 17:31:22 2001 alian
+Release 1.9 2001/10/14 17:31:22 2001 alian
 	- Ajout d'un mode debug
 	- Suppression trace recherche
 	- Correction routine import / export
 	- Correction fichier de test (test.pl)
+
+Release 1.8 2001/08/29 16:18:08 alian
+	- Manage a new namespace Search::Circa
+
+Release 1.7 2001/08/24 13:37:56 alian
+	- Add Annuaire.pm package for manage directory
+
+Release 1.6  2001/08/05 20:36:10  alian
+	- Remove some bugs
+	- Add verbose message when can't connect
+
+Release 1.5  2001/06/02 08:18:26  alian
+	- First release of Circa as one package

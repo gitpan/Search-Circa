@@ -3,39 +3,6 @@ package Search::Circa;
 # module Circa: provide general method for Circa
 # Copyright 2000 A.Barbet alian@alianwebserver.com.  All rights reserved.
 
-# $Log: Circa.pm,v $
-# Revision 1.9  2001/10/14 17:31:22  alian
-# - Ajout de la methode trace(..)
-# - Akpit d'un peu de POD doc
-#
-# Revision 1.8  2001/08/29 16:18:08  alian
-# - Update POD documentation for new namespace
-#
-# Revision 1.7  2001/08/24 13:37:56  alian
-# - Ajout du prefix Search:: devant chacun des modules
-#
-# Revision 1.6  2001/08/05 20:36:10  alian
-# - Add some doc
-#
-# Revision 1.5  2001/06/02 08:18:26  alian
-# - Add self parameter to appartient method
-#
-# Revision 1.4  2001/05/28 18:41:18  alian
-# - Move Parser method from Circa.pm to Indexer.pm
-#
-# Revision 1.3  2001/05/22 23:28:09  alian
-# - Remove load of Circa::Parser
-# - Add POD Documentation
-#
-# Revision 1.2  2001/05/21 22:51:01  alian
-# - Add field for export and import routine
-# - Add Pod documentation
-#
-# Revision 1.1  2001/05/21 18:47:24  alian
-# - Cumul des fonctions utilisées dans l'indexeur et le searcher
-#
-#
-
 use DBI;
 use DBI::DBD;
 use Search::Circa::Categorie;
@@ -47,7 +14,7 @@ require Exporter;
 
 @ISA = qw(Exporter);
 @EXPORT = qw();
-$VERSION = ('$Revision: 1.9 $ ' =~ /(\d+\.\d+)/)[0];
+$VERSION = ('$Revision: 1.11 $ ' =~ /(\d+\.\d+)/)[0];
 
 #------------------------------------------------------------------------------
 # new
@@ -140,7 +107,7 @@ sub start_classic_html
 sub trace
   {
     my ($self, $level, $msg)=@_;
-    if ($self->{DEBUG} >= $level) { print $msg,"\n"; }
+    if ($self->{DEBUG} >= $level) { print STDERR $msg,"\n"; }
   }
 
 #------------------------------------------------------------------------------
@@ -191,6 +158,24 @@ sub appartient
   return 0;
   }
 
+#------------------------------------------------------------------------------
+# prompt
+#------------------------------------------------------------------------------
+sub prompt
+  {
+    my($self,$mess,$def)=@_;
+    my $ISA_TTY = -t STDIN && (-t STDOUT || !(-f STDOUT || -c STDOUT)) ;
+    Carp::confess("prompt function called without an argument") 
+	  unless defined $mess;
+    my $dispdef = defined $def ? "[$def] " : " ";
+    $def = defined $def ? $def : "";
+    my $ans;
+    local $|=1;
+    print "$mess $dispdef";
+    if ($ISA_TTY) { chomp($ans = <STDIN>); }
+    else { print "$def\n"; }
+    return ($ans ne '') ? $ans : $def;
+  }
 
 #------------------------------------------------------------------------------
 # POD DOCUMENTATION
@@ -235,6 +220,31 @@ Search::Circa::Search.
 =head1 SYNOPSIS
 
 See L<Search::Circa::Search>, L<Search::Circa::Indexer>
+
+=head1 FREQUENTLY ASKED QUESTIONS
+
+Q: Where are clients for example ?
+
+A: See in demo directory. For command line, see *.pl file, for CGI, take
+a look in cgi-bin/
+
+Q: Where are global parameters to connect to Circa ?
+
+A: Use demo/CircaConf.pm file
+
+Q : What is an account for Circa ?
+
+A: It's like a project, or a databse. A namespace for what you want.
+
+Q : How I begin with indexer ?
+
+A: May be something like this: 
+
+   $ ./demo/admin.pl +create +add=http://monsite.com +parse_new=1 +depth_max
+
+Q : Did you succed to use Circa with mod_perl ?
+
+A: Yes
 
 =head1 SEE ALSO
 
@@ -315,6 +325,10 @@ row, else return just first column.
 
 Print message $msg on standart input if debug level for script is upper than
 $level
+
+=item prompt($message, $default_value)
+
+Ask in STDIN for a parameter and return value
 
 =back
 

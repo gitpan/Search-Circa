@@ -4,6 +4,14 @@ package Search::Circa::Parser;
 # Copyright 2000 A.Barbet alian@alianwebserver.com.  All rights reserved.
 
 # $Log: Parser.pm,v $
+# Revision 1.15  2001/10/28 12:22:09  alian
+# - Colonne browse_categorie mise à jour en fonction de auto_categorie
+#
+# Revision 1.14  2001/10/27 20:48:14  alian
+# - Correct incorrect usage of LWP::UserAgent constructor for local file
+# - Correct incorrect call of trace method
+# - Add some info on level debug 5
+#
 # Revision 1.13  2001/10/14 17:18:48  alian
 # - Ajout trace pour mode debug
 #
@@ -33,7 +41,7 @@ require Exporter;
 
 @ISA = qw(Exporter);
 @EXPORT = qw();
-$VERSION = ('$Revision: 1.13 $ ' =~ /(\d+\.\d+)/)[0];
+$VERSION = ('$Revision: 1.15 $ ' =~ /(\d+\.\d+)/)[0];
 
 # Mot à ne pas indexer
 my %bad = map {$_ => 1} qw (
@@ -53,9 +61,12 @@ sub new
     my $class = shift;
     my $self = {};
     my $indexer = shift;
+    $indexer->trace(5, "$Search::Circa::Parser::new\n");
     bless $self, $class;
     $self->{DBH} = $indexer->{DBH};
     $self->{ConfigMoteur} = $indexer->{ConfigMoteur};
+    while (my ($n,$v)=each(%{$indexer->{ConfigMoteur}}))
+	{ $indexer->trace(4, "\t$n => $v"); }
     $self->{INDEXER} = $indexer;
     # Ce module n'est presque jamais installé !
     # Evidemment cela demande une charge machine et un .so 
@@ -112,7 +123,7 @@ sub text
     if (!$inside{pre}) {$tex=~s/\\n//g;}
     # Buffer final epuré
     $TEXT.=$tex;
-  }                      
+  }
 
 #------------------------------------------------------------------------------
 # look_at
@@ -120,7 +131,10 @@ sub text
 sub look_at
   {
   my($this,$url,$idc,$idr,$lastModif,$url_local,$categorieAuto,$niveau,$categorie) = @_;
-  $this->{INDEXER}->trace(1, "Parser::look_at $url");
+  my $buf_debug = "\tUrl => $url\n\tIdc => $idc\n";
+  $buf_debug.= "\tLast update => $lastModif" unless (!defined($lastModif));
+  $buf_debug.= "\tUrl local => $url_local" unless (!defined($url_local));
+  $this->{INDEXER}->trace(5, "Parser::look_at\n$buf_debug");
   my ($l,$url_orig,$racineFile,$racineUrl,$lastUpdate);
   if ($url_local) {$this->set_agent(1);}
   else {$this->set_agent(0);}
@@ -207,7 +221,7 @@ sub look_at
       foreach ($titre,$desc,$keyword){ s/0x39/\\0x39/g if ($_); }	  
       # Categorie
       if ($categorieAuto) 
-	{$categorie = $this->{INDEXER}->categorie->get($url,$idr);}
+	  {$categorie = $this->{INDEXER}->categorie->get($url,$idr);}
       if (!$categorie) {$categorie=0;}
       # Mis a jour de l'url
       if ($this->{INDEXER}->URL->update
@@ -249,7 +263,7 @@ sub look_at
         }
       my $nbw=keys %$l;undef(%$l);
       # On n'indexe pas les liens si on est au niveau max
-      if ($niveau == $this->{ConfigMoteur}->{'niveau_max'})
+      if ($niveau == $this->{ConfigMoteur}{'niveau_max'})
         {
 	    $this->{INDEXER}->trace(1,"Niveau max atteint. Liens suivants de ". 
 					    "cette page ignorés<br>");
@@ -271,11 +285,14 @@ sub look_at
 	      $this->{INDEXER}->trace(2, "\t".$urlb);
 	      if ($this->{INDEXER}->URL->add($idr,
 							 (url       => $urlb, 
-							  local_url => $var,
+							  urllocal  => $var,
 							  niveau    => $niveau+1,
 							  categorie => $categorie,
-							  valide    => 1))) { $nburl++; }
-		else { trace(2, "\tCan't add $urlb:\n\t$DBI::errstr"); }
+							  valide    => 1,
+							  browse_categorie=>$categorieAuto)))
+		  { $nburl++; }
+		else {$this->{INDEXER}->trace
+			  (2,"\tCan't add $urlb:\n\t$DBI::errstr");}
 	    }
 	  elsif ($var) 
 	    {
@@ -303,16 +320,16 @@ sub look_at
 sub set_agent
   {
   my ($self,$locale)=@_;
+  $self->{INDEXER}->trace(5, "Circa::Parser::set_agent $locale\n");
   return if ($self->{AGENT} && $self->{_ROBOT}==$locale); # agent already set
   $self->{_ROBOT}=$locale;
-  
   if (($self->{ConfigMoteur}->{'temporate'}) && (!$locale))
     {
-      $self->{AGENT} = new LWP::RobotUA('CircaIndexer / $Revision: 1.13 $', 
+      $self->{AGENT} = new LWP::RobotUA('CircaIndexer / $Revision: 1.15 $', 
                                        $self->{ConfigMoteur}->{'author'});
       $self->{AGENT}->delay(1/120.0);
     }
-  else {$self->{AGENT} = new LWP::UserAgent 'CircaIndexer / $Revision: 1.13 $', $self->{ConfigMoteur}->{'author'};}
+  else {$self->{AGENT} = new LWP::UserAgent; }
   if ($self->{PROXY}) {$self->{AGENT}->proxy(['http', 'ftp'], $self->{PROXY});}
   $self->{AGENT}->max_size($self->{INDEXER}->size_max) 
     if ($self->{INDEXER}->size_max);
@@ -385,7 +402,7 @@ for index each document. Main method is C<look_at>.
 
 =head1 VERSION
 
-$Revision: 1.13 $
+$Revision: 1.15 $
 
 =head1 Public Class Interface
 
