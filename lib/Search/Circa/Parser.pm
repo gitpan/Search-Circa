@@ -4,6 +4,9 @@ package Search::Circa::Parser;
 # Copyright 2000 A.Barbet alian@alianwebserver.com.  All rights reserved.
 
 # $Log: Parser.pm,v $
+# Revision 1.13  2001/10/14 17:18:48  alian
+# - Ajout trace pour mode debug
+#
 # Revision 1.12  2001/08/26 23:10:50  alian
 # - Ajout des caracteres < et > au caracteres supprimes de l'analyse
 #
@@ -18,33 +21,6 @@ package Search::Circa::Parser;
 #
 # Revision 1.8  2001/05/28 22:32:02  alian
 # - Move load to HTML::Parser to new method. If not found, use a basic parser. (without link)
-#
-# Revision 1.7  2001/05/28 18:40:03  alian
-# - Add trace for debug mode
-#
-# Revision 1.6  2001/05/28 15:35:19  alian
-# - Move LWP::UserAgent call that use HTML::Parser in eval statement
-#
-# Revision 1.5  2001/05/22 23:25:39  alian
-# - Add a BEGIN / eval statement for use HTML::Parser 3.0.
-# It warn if it can't be find, but Circa without parsing can be run
-# - Correct a fonction call for local url.
-#
-# Revision 1.4  2001/05/21 23:02:08  alian
-# - Update for use new Circa facilities
-#
-# Revision 1.3  2001/05/20 11:28:25  alian
-# - Add some word to %bad
-# - Use new add & update of class url method
-#
-# Revision 1.2  2001/05/14 22:21:57  alian
-# - Update POD documentation
-# - Correct call to categorie method
-#
-# Revision 1.1  2001/05/14 17:49:06  alian
-# - Code extrait de Indexer.pm
-#
-#
 
 use strict;
 use URI::URL;
@@ -57,7 +33,7 @@ require Exporter;
 
 @ISA = qw(Exporter);
 @EXPORT = qw();
-$VERSION = ('$Revision: 1.12 $ ' =~ /(\d+\.\d+)/)[0];
+$VERSION = ('$Revision: 1.13 $ ' =~ /(\d+\.\d+)/)[0];
 
 # Mot à ne pas indexer
 my %bad = map {$_ => 1} qw (
@@ -98,7 +74,7 @@ sub new
 	$self->{_parser_ok}=0;
       }
     else { use HTML::Entities; }    
-    print "Parser::new\n" if ($self->{INDEXER}->{DEBUG});
+    $self->{INDEXER}->trace(1,"Parser::new");
     return $self;
   }
 
@@ -144,7 +120,7 @@ sub text
 sub look_at
   {
   my($this,$url,$idc,$idr,$lastModif,$url_local,$categorieAuto,$niveau,$categorie) = @_;
-  print "Parser::look_at\n" if ($this->{INDEXER}->{DEBUG});
+  $this->{INDEXER}->trace(1, "Parser::look_at $url");
   my ($l,$url_orig,$racineFile,$racineUrl,$lastUpdate);
   if ($url_local) {$this->set_agent(1);}
   else {$this->set_agent(0);}
@@ -202,7 +178,7 @@ sub look_at
       # HTML::Parser
       if ($this->{_parser_ok})
 	{
-	  print "Use HTML::Parser ...\n" if ($this->{INDEXER}->{DEBUG});
+	  $this->{INDEXER}->trace(1,"Use HTML::Parser ...");
 	  my $parser = HTML::Parser->new
 	    (api_version => 3,
 	     handlers => [start => [\&tag, "tagname, '+1', attr"],
@@ -216,7 +192,7 @@ sub look_at
 	}
       else
 	{
-	  print "Use a basic parser ...\n" if ($this->{INDEXER}->{DEBUG});
+	  $this->{INDEXER}->trace(1,"Use a basic parser ...");
 	  $TEXT = $res->content;
 	  $TEXT=~s{ <! (.*?) (--.*?--\s*)+(.*?)> } 
 	          {if ($1 || $3) {"<!$1 $3>";} }gesx;
@@ -234,18 +210,18 @@ sub look_at
 	{$categorie = $this->{INDEXER}->categorie->get($url,$idr);}
       if (!$categorie) {$categorie=0;}
       # Mis a jour de l'url
-      $this->{INDEXER}->URL->update
-	($idr,
-	 (parse        => 1,
-	  id           => $idc,
-	  titre        => $titre,
-	  description  => $desc,
-	  last_update  => $lastUpdate,
-	  last_check   => 'NOW()',
-	  langue       => $language,
-	  categorie    => $categorie
-	 )
-	);
+      if ($this->{INDEXER}->URL->update
+	    ($idr,
+	     (parse        => 1,
+		id           => $idc,
+		titre        => $titre,
+		description  => $desc,
+		last_update  => $lastUpdate,
+		last_check   => 'NOW()',
+		langue       => $language,
+		categorie    => $categorie
+	     )
+	    )) { $this->{INDEXER}->trace(2, "$url mis à jour avec success"); }
 	  
       # Traitement des mots trouves
       $l=analyse($keyword,$this->{ConfigMoteur}->{'facteur_keyword'},%$l);
@@ -264,21 +240,25 @@ sub look_at
 	  my $requete = "insert into ".
                        $this->{INDEXER}->pre_tbl.$idr.
                        "relation (mot,id_site,facteur) ".
-                       "values ('$mot',$idc,$nb)";
+                       "values ('$mot',$idc,$nb)";	  
         if ($nb >=$this->{'ConfigMoteur'}{'nb_min_mots'}) 
-          {$this->{INDEXER}->dbh->do($requete);$nbwg++;}
+          {
+		$this->{INDEXER}->dbh->do($requete) && $nbwg++;
+		$this->{INDEXER}->trace(3,"\t\tStore words: ".$requete);
+	    }
         }
       my $nbw=keys %$l;undef(%$l);
       # On n'indexe pas les liens si on est au niveau max
       if ($niveau == $this->{ConfigMoteur}->{'niveau_max'})
         {
-        print "Niveau max atteint. Liens suivants de cette page ignorés<br>\n" 
-	  if ($this->{DEBUG});
-        return (0,0,0);
+	    $this->{INDEXER}->trace(1,"Niveau max atteint. Liens suivants de ". 
+					    "cette page ignorés<br>");
+	    return (0,0,0);
         }  
       # Traitement des url trouves
       my $base = $res->base;
       my @l = keys %links; undef %links;
+	$this->{INDEXER}->trace(2, "Liens trouvés") if ($#l>0);
       foreach my $var (@l)
         {
 	  $var = url($var,$base)->abs; # Url absolu
@@ -288,22 +268,29 @@ sub look_at
 	      my $urlb = $var;
 	      $urlb=~s/$racineFile/$racineUrl/g;
 	      #print h1("Ajout site local:$$var[2] pour $racineFile");
-	      $this->{INDEXER}->URL->add($idr,
-					 (url       => $urlb, 
-					  local_url => $var,
-					  niveau    => $niveau+1,
-					  categorie => $categorie,
-					  valide    => 1)) && $nburl++;
+	      $this->{INDEXER}->trace(2, "\t".$urlb);
+	      if ($this->{INDEXER}->URL->add($idr,
+							 (url       => $urlb, 
+							  local_url => $var,
+							  niveau    => $niveau+1,
+							  categorie => $categorie,
+							  valide    => 1))) { $nburl++; }
+		else { trace(2, "\tCan't add $urlb:\n\t$DBI::errstr"); }
 	    }
 	  elsif ($var) 
 	    {
-	      $this->{INDEXER}->URL->add($idr,(url       => $var,
-					       niveau    => $niveau+1,
-					       categorie => $categorie,
-					       valide => 1))
-		&& $nburl++;
+	      $this->{INDEXER}->trace(2, "\t".$var);
+	      if ($this->{INDEXER}->URL->add($idr,(url       => $var,
+								 niveau    => $niveau+1,
+								 categorie => $categorie,
+								 valide => 1)))
+		  { $nburl++; }
+		else 
+		  { $this->{INDEXER}->trace(2, 
+						    "\tCan't add $var:\n\t$DBI::errstr");}
 	    }
         }
+	$this->{INDEXER}->trace(3, "---------------------------------\n");
       return ($nburl,$nbw,$nbwg);
     }
   # Sinon previent que URL defectueuse
@@ -321,11 +308,11 @@ sub set_agent
   
   if (($self->{ConfigMoteur}->{'temporate'}) && (!$locale))
     {
-      $self->{AGENT} = new LWP::RobotUA('CircaIndexer / $Revision: 1.12 $', 
+      $self->{AGENT} = new LWP::RobotUA('CircaIndexer / $Revision: 1.13 $', 
                                        $self->{ConfigMoteur}->{'author'});
-      $self->{AGENT}->delay(10/60.0);
+      $self->{AGENT}->delay(1/120.0);
     }
-  else {$self->{AGENT} = new LWP::UserAgent 'CircaIndexer / $Revision: 1.12 $', $self->{ConfigMoteur}->{'author'};}
+  else {$self->{AGENT} = new LWP::UserAgent 'CircaIndexer / $Revision: 1.13 $', $self->{ConfigMoteur}->{'author'};}
   if ($self->{PROXY}) {$self->{AGENT}->proxy(['http', 'ftp'], $self->{PROXY});}
   $self->{AGENT}->max_size($self->{INDEXER}->size_max) 
     if ($self->{INDEXER}->size_max);
@@ -398,7 +385,7 @@ for index each document. Main method is C<look_at>.
 
 =head1 VERSION
 
-$Revision: 1.12 $
+$Revision: 1.13 $
 
 =head1 Public Class Interface
 

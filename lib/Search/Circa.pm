@@ -4,6 +4,10 @@ package Search::Circa;
 # Copyright 2000 A.Barbet alian@alianwebserver.com.  All rights reserved.
 
 # $Log: Circa.pm,v $
+# Revision 1.9  2001/10/14 17:31:22  alian
+# - Ajout de la methode trace(..)
+# - Akpit d'un peu de POD doc
+#
 # Revision 1.8  2001/08/29 16:18:08  alian
 # - Update POD documentation for new namespace
 #
@@ -43,7 +47,7 @@ require Exporter;
 
 @ISA = qw(Exporter);
 @EXPORT = qw();
-$VERSION = ('$Revision: 1.8 $ ' =~ /(\d+\.\d+)/)[0];
+$VERSION = ('$Revision: 1.9 $ ' =~ /(\d+\.\d+)/)[0];
 
 #------------------------------------------------------------------------------
 # new
@@ -56,7 +60,7 @@ sub new
     $self->{DBH} = undef;
     $self->{PREFIX_TABLE} = 'circa_';
     $self->{SERVER_PORT}  ="3306";   # Port de mysql par default
-    #$self->{DEBUG} = 1;
+    $self->{DEBUG} = 0;
     return $self;
   }
 
@@ -86,8 +90,10 @@ sub pre_tbl
 sub connect
   {
   my ($this,$user,$password,$db,$server)=@_;
+  $server = '127.0.0.1' if (!$server);
   my $driver = "DBI:mysql:database=$db;host=$server;port=".$this->port_mysql;
   $this->{_DB}=$db; $this->{_PASSWORD}=$password; $this->{_USER}=$user;
+  $this->{_HOST}=$server;
   $this->{DBH} = DBI->connect($driver,$user,$password,{ PrintError => 0 }) 
     || return 0;
   return 1;
@@ -128,7 +134,14 @@ sub start_classic_html
 	  -'dtd'    => '-//W3C//DTD HTML 4.0 Transitional//EN" "http://www.w3.org/TR/REC-html40/loose.dtd')."\n";
   }
 
-
+#------------------------------------------------------------------------------
+# trace
+#------------------------------------------------------------------------------
+sub trace
+  {
+    my ($self, $level, $msg)=@_;
+    if ($self->{DEBUG} >= $level) { print $msg,"\n"; }
+  }
 
 #------------------------------------------------------------------------------
 # header
@@ -216,6 +229,9 @@ Search::Circa::Search work with Search::Circa::Indexer result.
 Search::Circa::Search is a Perl interface, but it's exist on 
 this package a PHP client too.
 
+Search::Circa is root class for Search::Circa::Indexer and 
+Search::Circa::Search.
+
 =head1 SYNOPSIS
 
 See L<Search::Circa::Search>, L<Search::Circa::Indexer>
@@ -294,6 +310,11 @@ this function give:
 
 Execute request SQL on db and return first row. In list context, retun full 
 row, else return just first column.
+
+=item trace($level, $msg)
+
+Print message $msg on standart input if debug level for script is upper than
+$level
 
 =back
 

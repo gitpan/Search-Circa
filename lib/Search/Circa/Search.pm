@@ -4,6 +4,9 @@ package Search::Circa::Search;
 # Copyright 2000 A.Barbet alian@alianwebserver.com.  All rights reserved.
 
 # $Log: Search.pm,v $
+# Revision 1.16  2001/10/14 17:17:32  alian
+# - Suppression d'une trace oubliee sur les mots avec and
+#
 # Revision 1.15  2001/08/29 16:25:02  alian
 # - Remove get_liste_categorie_fils() routine (move in Categorie)
 # - Update POD documentation for new namespace
@@ -64,7 +67,7 @@ require Exporter;
 
 @ISA = qw(Exporter Search::Circa);
 @EXPORT = qw();
-$VERSION = ('$Revision: 1.15 $ ' =~ /(\d+\.\d+)/)[0];
+$VERSION = ('$Revision: 1.16 $ ' =~ /(\d+\.\d+)/)[0];
 
 # -------------------
 # Template par defaut
@@ -115,7 +118,7 @@ sub search
   $tab=$this->search_word($tab,join("','",@mots_tmp),$idc,
 			  $langue,$Url,$create,$update,$categorie);
   # On supprime tout ceux qui ne repondent pas aux criteres and si present
-  foreach my $ind (@ind_and) {   print "mp $ind : ",$mots_tmp[$ind],"\n";
+  foreach my $ind (@ind_and) { 
     foreach my $url (keys %$tab) {
    
       delete $$tab{$url} if 
@@ -425,7 +428,7 @@ interface, but it's exist on this package a PHP client too.
 
 =head1 VERSION
 
-$Revision: 1.15 $
+$Revision: 1.16 $
 
 =head1 Class Interface
 

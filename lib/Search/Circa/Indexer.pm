@@ -4,6 +4,12 @@ package Search::Circa::Indexer;
 # Copyright 2000 A.Barbet alian@alianwebserver.com.  All rights reserved.
 
 # $Log: Indexer.pm,v $
+# Revision 1.26  2001/10/07 12:04:03  alian
+# - Prise en compte du host pour l'import/export
+#
+# Revision 1.25  2001/09/23 10:39:34  alian
+# - Ajout de messages suppl. si export echoue
+#
 # Revision 1.24  2001/08/29 17:45:32  alian
 # - Correction d'un bug lors de l'affichage d'erreur Mysql dans
 # get_liste_liens
@@ -62,7 +68,7 @@ require Exporter;
 
 @ISA = qw(Exporter Search::Circa);
 @EXPORT = qw();
-$VERSION = ('$Revision: 1.24 $ ' =~ /(\d+\.\d+)/)[0];
+$VERSION = ('$Revision: 1.26 $ ' =~ /(\d+\.\d+)/)[0];
 
 ########## CONFIG  ##########
 my %ConfigMoteurDefault=(
@@ -413,10 +419,11 @@ CREATE TABLE ".$self->pre_tbl.$id."stats (
 sub export
   {
   my ($self,$dump,$path)=@_;
-  my ($pass,$file);
+  my ($pass, $file, $host, $user);
   if (!$path) {use Cwd;$path=cwd;}
   $file=$path."/circa.sql";$file=~s/\/\//\//g;
-  if ( (! -w $path) || ( ( -e $file) && (!-w $file)))  {$self->close; die "Can't create $file:$!\n";}
+  if ( (! -w $path) || ( ( -e $file) && (!-w $file)))  
+    {$self->close; die "Can't create $file (not enough rights ?):$!\n";}
   if ( (!$dump) || (! -x $dump))
     {
     if (-x "/usr/bin/mysqldump") {$dump = "/usr/bin/mysqldump" ;}
@@ -424,7 +431,8 @@ sub export
     elsif (-x "/opt/bin/mysqldump") {$dump = "/opt/bin/mysqldump" ;}
     else {$self->close; die "Can't find mysqldump.\n";}
     }
-  unlink $file;
+  if ((-e $file) && (!(unlink $file))) 
+	{ $self->close; die "Can't unlink $file:$!\n";}
   my (@t,@exec);
   my $requete = "select id from ".$self->pre_tbl."responsable";
   my $sth = $self->{DBH}->prepare($requete);
@@ -433,14 +441,22 @@ sub export
   $sth->finish;
   if ($self->{_PASSWORD}) {$pass=" -p".$self->{_PASSWORD}.' ';}
   else {$pass=' ';}
-  push(@exec,$dump." --add-drop-table -u".$self->{_USER}.$pass.$self->{_DB}." ".$self->pre_tbl."responsable >> $file");
-  push(@exec,$dump." --add-drop-table  -u".$self->{_USER}.$pass.$self->{_DB}." ".$self->pre_tbl."local_url >> $file");
-  push(@exec,$dump." --add-drop-table  -u".$self->{_USER}.$pass.$self->{_DB}." ".$self->pre_tbl."inscription >> $file");
+  if ($self->{_HOST}) {$host=" -h".$self->{_HOST}.' ';}
+  else {$host=' ';}
+  push(@exec,$dump." --add-drop-table -u".$self->{_USER}.
+	 $pass.$host.$self->{_DB}." ".$self->pre_tbl."responsable >> $file");
+  push(@exec,$dump." --add-drop-table  -u".$self->{_USER}.
+	 $pass.$host.$self->{_DB}." ".$self->pre_tbl."local_url >> $file");
+  push(@exec,$dump." --add-drop-table  -u".$self->{_USER}.
+	 $pass.$host.$self->{_DB}." ".$self->pre_tbl."inscription >> $file");
   foreach my $id (@t)
     {
-    push(@exec,$dump." --add-drop-table -u".$self->{_USER}.$pass.$self->{_DB}." ".$self->pre_tbl.$id."categorie >> $file");
-    push(@exec,$dump." --add-drop-table -u".$self->{_USER}.$pass.$self->{_DB}." ".$self->pre_tbl.$id."links >> $file");
-    push(@exec,$dump." --add-drop-table -u".$self->{_USER}.$pass.$self->{_DB}." ".$self->pre_tbl.$id."relation >> $file");
+    push(@exec,$dump." --add-drop-table -u".$self->{_USER}.
+	   $pass.$host.$self->{_DB}." ".$self->pre_tbl.$id."categorie >> $file");
+    push(@exec,$dump." --add-drop-table -u".$self->{_USER}.
+	   $pass.$host.$self->{_DB}." ".$self->pre_tbl.$id."links >> $file");
+    push(@exec,$dump." --add-drop-table -u".$self->{_USER}.
+	   $pass.$host.$self->{_DB}." ".$self->pre_tbl.$id."relation >> $file");
     #push(@exec,$dump." --add-drop-table -u".$self->{_USER}.$pass.$self->{_DB}." ".$self->pre_tbl.$id."stats >> $file");
     }
   $|=1;
@@ -470,7 +486,8 @@ sub import_data
   $|=1;
   print "En cours d'import ...";
   my $c = $dump." -u".$self->{_USER};
-  $c.=" -p".$self->{_PASSWORD} if ($self->{_PASSWORD});
+  $c.=" -p".$self->{_PASSWORD}." " if ($self->{_PASSWORD});
+  $c.=" -h".$self->{_HOST}." " if ($self->{_HOST});
   $c.=" ".$self->{_DB}." < ".$file;
   system($c) == 0 or print "Fail:$c:$?\n";
   print "$file imported.\n";
@@ -935,7 +952,7 @@ grow to one. So if < to $Config{'niveau_max'}, url is added.
 
 =head1 VERSION
 
-$Revision: 1.24 $
+$Revision: 1.26 $
 
 =head1 Class Interface
 

@@ -4,6 +4,10 @@ package Search::Circa::Url;
 # Copyright 2000 A.Barbet alian@alianwebserver.com.  All rights reserved.
 
 # $Log: Url.pm,v $
+# Revision 1.12  2001/10/14 17:18:20  alian
+# - Mise à jour de la methode Update pour qu'elle retourne 0/1 suivant le
+# resultat de la requete
+#
 # Revision 1.11  2001/08/26 23:08:32  alian
 # - Update POD documentation
 #
@@ -49,7 +53,7 @@ require Exporter;
 
 @ISA = qw(Exporter);
 @EXPORT = qw();
-$VERSION = ('$Revision: 1.11 $ ' =~ /(\d+\.\d+)/)[0];
+$VERSION = ('$Revision: 1.12 $ ' =~ /(\d+\.\d+)/)[0];
 
 
 #------------------------------------------------------------------------------
@@ -91,9 +95,8 @@ sub add
       if ($url{browse_categorie});
     #print $requete,"<br>\n";
     $self->{DBH}->do($requete) || return 0; 
-    #print "Add $url<br>\n";
-    if ($DBI::errstr) {return 0;}
-    else { return 1;}
+    if ($DBI::errstr) { print $DBI::errstr,"\n"; return 0; }
+    return 1;
   }
 
 #------------------------------------------------------------------------------
@@ -121,7 +124,8 @@ sub update
     if ($url{browse_categorie});
   $requete.="  where id=$url{id}"; 
   #print $requete;
-  $self->{DBH}->do($requete) || print "Erreur: $requete $DBI::errstr<br>\n";
+  $self->{DBH}->do($requete) || return 0;
+  return 1;
   }
 
 #------------------------------------------------------------------------------
@@ -319,7 +323,7 @@ Search::Circa::Url - provide functions to manage url of Circa
 
 =head1 VERSION
 
-$Revision: 1.11 $
+$Revision: 1.12 $
 
 =head1 SYNOPSIS
 

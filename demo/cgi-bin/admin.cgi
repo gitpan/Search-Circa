@@ -3,7 +3,7 @@
 # Simple CGI interface to module Search::Circa::Indexer
 # Copyright 2000 A.Barbet alian@alianwebserver.com.  All rights reserved.
 # Take a look in admin.htm
-# $Date: 2001/08/29 17:47:50 $
+# $Date: 2001/09/23 10:37:11 $
 #
 
 use strict;
@@ -12,15 +12,15 @@ use CGI::Carp qw/fatalsToBrowser/;
 use CircaConf;
 use lib $CircaConf::CircaDir;
 use Search::Circa::Indexer;
+use Cwd;
 
 $|=1;
 
-# Repertoire des ecrans
-my $masque = $CircaConf::TemplateDir."admin.htm";
-my $masqueClients = "/tmp/";
+my $masque        = $CircaConf::TemplateDir."admin.htm";
+my $masqueClients = $CircaConf::TemplateDir; # rep ou deposer les masques
+my $importDir     = $CircaConf::export;
 my $indexor = new Search::Circa::Indexer;
 #$indexor->proxy("http://192.168.100.70:3128");
-$|=1;
 
 my $cgi = new CGI;
 print header,$indexor->start_classic_html($cgi);
@@ -52,9 +52,9 @@ if (param('url'))
   print h1("Site ajouté");
   }
 # export data
-if (param('export')) {$indexor->export(undef,$masqueClients);}
+if (param('export')) {$indexor->export(undef,$importDir);}
 # import data
-if (param('import')) {$indexor->import_data(undef,$masqueClients);}
+if (param('import')) {$indexor->import_data(undef,$importDir);}
 # Add local site
 if (param('local_url'))
   {

@@ -2,24 +2,24 @@
 #
 # Simple perl example to interface with module Search::Circa::Indexer
 # Copyright 2000 A.Barbet alian@alianwebserver.com.  All rights reserved.
-# $Date: 2001/08/29 17:47:50 $
+# $Date: 2001/10/14 17:33:48 $
 #
 
 use strict;
 use Getopt::Long;
 use CircaConf;
-use lib $Circa::CircaDir;
+use lib $CircaConf::CircaDir;
 use Search::Circa::Indexer;
 
 my $indexor = new Search::Circa::Indexer(
   'author'              => 'circa@alianwebserver.com', # Responsable du moteur
-  'temporate'           => 0,  # Temporise les requetes sur le serveur de 8s.
+  'temporate'           => 1,  # Temporise les requetes sur le serveur de 8s.
   'facteur_keyword'     => 15, # <meta name="KeyWords"
   'facteur_description' => 10, # <meta name="description"
   'facteur_titre'       => 10, # <title></title>
   'facteur_full_text'   => 1,  # reste
   'facteur_url'         => 10,
-  'nb_min_mots'         => 2,  # facteur min pour garder un mot
+  'nb_min_mots'         => 3,  # facteur min pour garder un mot
   'niveau_max'          => 7,  # Niveau max à indexer
   'indexCgi'            => 0,  # Suit les différents liens des CGI 
 					 # (ex: ?nom=toto&riri=eieiei)
@@ -28,9 +28,10 @@ my $indexor = new Search::Circa::Indexer(
 if ( (@ARGV==0) || ($ARGV[0] eq '-h')) {&usage();}
   
 
-my ($create,$drop,$update,$parse_new,$add,$addSite,$addLocal,$stats,$export,$import,$depth,$drop_id);
+my ($create, $drop, $update, $parse_new, $add, $addSite, $addLocal, $stats,
+    $export, $import, $depth, $drop_id, $debug);
 GetOptions 
-  (   
+  (
    "create"      => \$create,
    "drop"        => \$drop,
    "update=s"    => \$update,
@@ -42,8 +43,9 @@ GetOptions
    "stats=s"     => \$stats,
    "export"      => \$export,
    "import"      => \$import,
-   "drop_id=s"   => \$drop_id);
-
+   "drop_id=s"   => \$drop_id,
+   "debug=s"     => \$debug);
+$indexor->{DEBUG}=$debug if ($debug);
 if (!$indexor->connect($CircaConf::User,
 			     $CircaConf::Password,
 			     $CircaConf::Database,
@@ -166,7 +168,7 @@ print <<EOF;
 Usage: admin.pl [-h] [+create] [+drop] [+export] [+import]
   [+update=nb_day,id_site] [+stats=id_site]  [+drop_id=id]
   [+parse_new=id_site] [+add=url, [email], [titre], [masque] ]
-  [+add_site=url [,id] ] 
+  [+add_site=url [,id] ] [+debug=(1-4)] 
   [+addLocal=file,url,email,titre,urlRacine,pathRacine]
 
 ******************************************************************
