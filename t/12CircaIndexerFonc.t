@@ -20,7 +20,7 @@ $ENV{PATH}=''; $ENV{ENV}='';
 
   ok( $circa->connect, "Search::Circa::Indexer->connect");
 
-  my $id = $circa->addSite("http://127.0.0.1");
+  my $id = $circa->addSite({url => "http://127.0.0.1"});
   ok($id  ,"Search::Circa::Indexer->addSite");
 
   my ($nbIndexe,$nbAjoute,$nbWords,$nbWordsGood) = $circa->parse_new_url($id);

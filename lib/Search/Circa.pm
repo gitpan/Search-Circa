@@ -2,6 +2,7 @@ package Search::Circa;
 
 # module Circa: provide general method for Circa
 # Copyright 2000 A.Barbet alian@alianwebserver.com.  All rights reserved.
+# $Date: 2002/12/29 13:55:16 $
 
 use DBI;
 use DBI::DBD;
@@ -10,47 +11,48 @@ use Search::Circa::Categorie;
 use Search::Circa::Url;
 use strict;
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
+use Carp qw/cluck/;
 
 require Exporter;
 
 @ISA = qw(Exporter);
 @EXPORT = qw();
-$VERSION = ('$Revision: 1.14 $ ' =~ /(\d+\.\d+)/)[0];
+$VERSION = ('$Revision: 1.17 $ ' =~ /(\d+\.\d+)/)[0];
 
 #------------------------------------------------------------------------------
 # new
 #------------------------------------------------------------------------------
-sub new 
-  {
-    my $class = shift;
-    my $self = {};
-    bless $self, $class;
-    $self->{DBH} = undef;
-    $self->{PREFIX_TABLE} = 'circa_';
-    $self->{SERVER_PORT}  ="3306";   # Port de mysql par default
-    $self->{DEBUG} = 0;
-    return $self;
-  }
+sub new  {
+  my $class = shift;
+  my $self = {};
+  bless $self, $class;
+  $self->{DBH} = undef;
+  $self->{PREFIX_TABLE} = 'circa_';
+  $self->{SERVER_PORT}  ="3306";   # Port de mysql par default
+  $self->{DEBUG} = 0;
+  return $self;
+}
+
+sub DESTROY { $_[0]->close(); }
+
 
 #------------------------------------------------------------------------------
 # port_mysql
 #------------------------------------------------------------------------------
-sub port_mysql
-  {
+sub port_mysql  {
   my $self = shift;
   if (@_) {$self->{SERVER_PORT}=shift;}
   return $self->{SERVER_PORT};
-  }
+}
 
 #------------------------------------------------------------------------------
 # pre_tbl
 #------------------------------------------------------------------------------
-sub pre_tbl
-  {
+sub pre_tbl  {
   my $self = shift;
   if (@_) {$self->{PREFIX_TABLE}=shift;}
   return $self->{PREFIX_TABLE};
-  }
+}
 
 #------------------------------------------------------------------------------
 # connect
@@ -75,7 +77,7 @@ sub connect  {
 #------------------------------------------------------------------------------
 # close
 #------------------------------------------------------------------------------
-sub close {$_[0]->{DBH}->disconnect;}
+sub close {$_[0]->{DBH}->disconnect if ($_[0]->{DBH}); }
 
 #------------------------------------------------------------------------------
 # dbh
@@ -112,10 +114,17 @@ sub start_classic_html
 #------------------------------------------------------------------------------
 sub trace  {
   my ($self, $level, $msg)=@_;
-  if ($self->{DEBUG} >= $level) { 
+  cluck if ($level >= 3 and $self->{DEBUG} >= $level);
+
+  if ($self->{DEBUG} >= $level) {
+    if ($msg) {
+      if ($ENV{SERVER_NAME}) {
+	print STDERR $msg,"\n"; }
+      else { print $msg,"\n"; }
+    }
     if ($ENV{SERVER_NAME}) {
-      print STDERR $msg,"\n"; }
-    else { $msg,"\n"; }
+      print STDERR "\n"; }
+    else { print "\n"; }
   }
 }
 
@@ -195,7 +204,7 @@ sub prompt
 
 =head1 NAME
 
-Circa - a Search Engine/Indexer running with Mysql
+Search::Circa - a Search Engine/Indexer running with Mysql
 
 =head1 DESCRIPTION
 
@@ -233,12 +242,109 @@ Search::Circa::Search.
 
 See L<Search::Circa::Search>, L<Search::Circa::Indexer>
 
+=head1 FEATURES
+
+=over
+
+=item *
+
+Search Features
+
+=over
+
+=item *
+
+Boolean query language support : or (default) and ("+") not ("-"). Ex perl + faq -cgi :
+Documents with faq, eventually perl and not cgi.
+
+=item *
+
+Client Perl or PHP
+
+=item *
+
+Can browse site by directory / rubrique.
+
+=item *
+
+Search for different criteria: news, last modified date, language, URL / site.
+
+=back
+
+=item *
+
+Full text indexing
+
+=item *
+
+Different weights for title, keywords, description and rest of page HTML read can be given in configuration
+
+=item *
+
+Herite from features of LWP suite:
+
+=over
+
+=item *
+
+Support protocol HTTP://,FTP://, FILE:// (Can do indexation of filesystem without talk to Web Server)
+
+=item *
+
+Full support of standard robots exclusion (robots.txt). Identification with
+CircaIndexer/0.1, mail alian@alianwebserver.com. Delay requests to
+the same server for 8 secondes. "It's not a bug, it's a feature!" Basic
+rule for HTTP serveur load.
+
+=item *
+
+Support proxy HTTP.
+
+=back
+
+=item *
+
+Make index in MySQL
+
+=item *
+
+Read HTML and full text plain
+
+=item *
+
+Several kinds of indexing : full, incremental, only on a particular server.
+
+=item *
+
+Documents not updated are not reindexed.
+
+=item *
+
+All requests for a file are made first with a head http request, for information
+such as validate, last update, size, etc.Size of documents read can be
+restricted (Ex: don't get all documents > 5 MB). For use with low-bandwidth
+connections, or computers which do not have much memory.
+
+=item *
+
+HTML template can be easily customized for your needs.
+
+=item *
+
+Admin functions available by browser interface or command-line.
+
+=item *
+
+Index the different links found in a CGI (all after name_of_file?)
+
+=back
+
 =head1 FREQUENTLY ASKED QUESTIONS
 
 Q: Where are clients for example ?
 
-A: See in demo directory. For command line, see *.pl file, for CGI, take
-a look in cgi-bin/
+A: See in demo directory. For command line, see circa_admin and circa_search,,
+for CGI, take a look in cgi-bin/circa, they are installed with make cgi.
 
 Q: Where are global parameters to connect to Circa ?
 
@@ -250,27 +356,11 @@ A: It's like a project, or a databse. A namespace for what you want.
 
 Q : How I begin with indexer ?
 
-A: May be something like this: 
-
-   $ circa_admin +create +add=http://monsite.com +parse_new=1 +depth_max
+A: See man page of L<circa_admin>
 
 Q : Did you succed to use Circa with mod_perl ?
 
 A: Yes
-
-=head1 SEE ALSO
-
-L<Search::Circa::Indexer> : Indexer module
-
-L<Search::Circa::Search> : Searcher module
-
-L<Search::Circa::Annuaire> : Manage directory of Circa
-
-L<Search::Circa::Url> : Manage url of Circa
-
-L<Search::Circa::Categorie> : Manage categorie of Circa
-
-L<Search::Circa::Parser> : Manage Parser of Indexer
 
 =head1 Public interface
 
@@ -279,7 +369,7 @@ Search::Circa::Search object
 
 =over
 
-=item connect($user, $password, $db, $host)
+=item B<connect> I<user, password, database, host>
 
 Connect Circa to MySQL. Return 1 on succes, 0 else
 
@@ -287,62 +377,88 @@ Connect Circa to MySQL. Return 1 on succes, 0 else
 
 =item *
 
-$user     : Utilisateur MySQL
+user     : Utilisateur MySQL
 
 =item *
 
-$password : Mot de passe MySQL
+password : Mot de passe MySQL
 
 =item *
 
-$db       : Database MySQL
+db       : Database MySQL
 
 =item *
 
-$bost   : Adr IP du serveur MySQL
+bost   : Adr IP du serveur MySQL
 
 =back
 
 Connect Circa to MySQL. Return 1 on succes, 0 else
 
-=item close
+=item B<close>
 
-Close connection to MySQL
+Close connection to MySQL. This method is called with DESTROY method of this
+class.
 
-=item pre_tbl
+=item B<pre_tbl>
 
 Get or set the prefix for table name for use Circa with more than one
 time on a same database
 
-=item fill_template($masque,$vars)
+=item B<fill_template> I<masque, ref_hash>
 
- $masque : Path of template
- $vars : hash ref with keys/val to substitue
+=over
+
+=item *
+
+masque : Path of template
+
+=item *
+
+vars : hash ref with keys/val to substitue
+
+=back
 
 Give template with remplaced variables
-Ex: if $$vars{age}=12, and $masque have
+Ex: 
 
-  J'ai <? $age ?> ans,
+ $circa->fill_template('A <? $age ?> ans', ('age' => '12 ans'));
 
-this function give:
+Will return:
 
   J'ai 12 ans,
 
-=item fetch_first($requete)
+=item B<fetch_first> I<request>
 
 Execute request SQL on db and return first row. In list context, retun full 
 row, else return just first column.
 
-=item trace($level, $msg)
+=item B<trace> I<level, msg>
 
-Print message $msg on standart input if debug level for script is upper than
-$level
+Print message I<msg> on standart output error if debug level for script
+is upper than I<level>.
 
-=item prompt($message, $default_value)
+=item B<prompt> I<message, default_value>
 
-Ask in STDIN for a parameter and return value
+Ask in STDIN for a parameter with message and default_value and return value
 
 =back
+
+=head1 SEE ALSO
+
+L<Search::Circa::Indexer>, Indexer module
+
+L<Search::Circa::Search>, Searcher module
+
+L<Search::Circa::Annuaire>, Manage directory of Circa
+
+L<Search::Circa::Url>, Manage url of Circa
+
+L<Search::Circa::Categorie>, Manage categorie of Circa
+
+=head1 VERSION
+
+$Revision: 1.17 $
 
 =head1 AUTHOR
 

@@ -10,7 +10,7 @@ require Exporter;
 
 @ISA = qw(Exporter);
 @EXPORT = qw();
-$VERSION = ('$Revision: 1.17 $ ' =~ /(\d+\.\d+)/)[0];
+$VERSION = ('$Revision: 1.18 $ ' =~ /(\d+\.\d+)/)[0];
 
 
 #------------------------------------------------------------------------------
@@ -60,7 +60,7 @@ sub add  {
       $id = $sth->{'mysql_insertid'};
     }
   else {
-    $self->{INDEXER}->trace(1, "Circa::Url->add $requete $DBI::errstr\n");
+    $self->{INDEXER}->trace(2, "Circa::Url->add $requete $DBI::errstr\n");
     return undef;
   }
   return $id;
@@ -72,8 +72,14 @@ sub add  {
 sub update  {
   my ($self,$compte,%url)=@_;
   return undef unless ($url{id});
-  $url{titre}=~s/([^\\])'/$1\\'/g if ($url{titre});
-  $url{description}=~s/([^\\])'/$1\\'/g if ($url{description});
+  if ($url{titre}) {
+    $url{titre}=~s/'/\\'/g;
+    $url{titre}=~s/\\\\'/\\'/g;
+  }
+  if ($url{description}) {
+    $url{description}=~s/'/\\'/g;
+    $url{description}=~s/\\\\'/\\'/g;
+  }
   my $requete =
     "update ".$self->{INDEXER}->pre_tbl.$compte."links set \n";
 #  $requete.= "\n\turl    = '$url{url}',"         if ($url{url});
@@ -117,6 +123,7 @@ sub load  {
              last_check,last_update,browse_categorie
     from ".$self->{INDEXER}->pre_tbl.$compte."links
     where id=".$id);
+ # print "load $id:", join(' ',@l),"\n";
   return 0 if (!@l);
   my %tab=
     ( url              => $l[0],
@@ -173,32 +180,27 @@ sub valid_all_non_valid  {
 #------------------------------------------------------------------------------
 # need_parser
 #------------------------------------------------------------------------------
-sub need_parser
-  { 
-    my ($self,$idp)=@_;
-    my %tab;
-    my $requete="select id,url,local_url,niveau,categorie,".
-                       "UNIX_TIMESTAMP(last_update) ".
-                 "from ".$self->{INDEXER}->pre_tbl.$idp."links ".
-                 "where parse='0' and valide=1 ".
-                 "order by id";
-    my $sth = $self->{DBH}->prepare($requete);
-    if ($sth->execute())
-      {
-	while (my @row=$sth->fetchrow_array)
-	  { 
-	    my $id = shift @row; 
-	    $tab{$id}[0]=$row[0]; # url
-	    $tab{$id}[1]=$row[1]; # local_url
-	    $tab{$id}[2]=$row[2]; # niveau
-	    $tab{$id}[3]=$row[3]; # categorie
-	    $tab{$id}[4]=$row[4]; # last_update	    
-	  }
-      }
-    else {print "\nDid you call create before ?\n";}
-    $sth->finish;
-    return \%tab;
+sub need_parser {
+  my ($self,$idp)=@_;
+  my %tab;
+  my $requete="select id,url,local_url,niveau,categorie ".
+    "from ".$self->{INDEXER}->pre_tbl.$idp."links ".
+    "where parse='0' and valide=1 ".
+    "order by niveau,id";
+  my $sth = $self->{DBH}->prepare($requete);
+  if ($sth->execute()) {
+    while (my @row=$sth->fetchrow_array) {
+      my $id = shift @row; 
+      $tab{$id}[0]=$row[0]; # url
+      $tab{$id}[1]=$row[1]; # local_url
+      $tab{$id}[2]=$row[2]; # niveau
+      $tab{$id}[3]=$row[3]; # categorie
+    }
   }
+  else {print "\nDid you call create before ?\n";}
+  $sth->finish;
+  return \%tab;
+}
 
 #------------------------------------------------------------------------------
 # liens
@@ -232,7 +234,7 @@ sub need_update
                         UNIX_TIMESTAMP(last_update)
                  from ".$self->{INDEXER}->pre_tbl.$idp."links
                  where TO_DAYS(NOW()) >= (TO_DAYS(last_check) + $xj)
-                 and valide=1 order by url";
+                 and valide=1 order by niveau,last_update";
     my $sth = $self->{DBH}->prepare($requete);
     if ($sth->execute())
       {
@@ -305,7 +307,7 @@ Search::Circa::Url - provide functions to manage url of Circa
 
 =head1 VERSION
 
-$Revision: 1.17 $
+$Revision: 1.18 $
 
 =head1 SYNOPSIS
 

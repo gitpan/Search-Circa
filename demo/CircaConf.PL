@@ -1,7 +1,7 @@
  use Config;
  use File::Basename qw(basename dirname);
 
-$VERSION = ('$Revision: 1.2 $ ' =~ /(\d+\.\d+)/)[0];
+$VERSION = ('$Revision: 1.3 $ ' =~ /(\d+\.\d+)/)[0];
 
  open(O,".m") or die "Can't found circa information:$!\n";
  my $l =<O>;
@@ -70,7 +70,7 @@ require Exporter;
    'facteur_full_text' => 1,  # reste
    'facteur_url'       => 10, #
    'nb_min_mots'       => 3,  # facteur min pour garder un mot
-   'niveau_max'        => 0,  # Niveau max à indexer
+   'niveau_max'        => 10,  # Niveau max à indexer
    'indexCgi'          => 0   # follow link for CGI (ex: ?nom=toto&riri=eieiei
    );
 
@@ -86,14 +86,12 @@ require Exporter;
 # - \$last_update : From HTTP header field
 \$CircaConf::templateS ='"
 <!-- Link item -->
-<p>\$indiceG - <a href=\\"\$url\\" target=\\"_blank\\"> \$titre </a> 
+<div class=\\"item\\">\$indiceG - <a href=\\"\$url\\" target=\\"_blank\\"> \$titre </a> 
     \$description <br>
-    <font class=\\"small\\">
-          <b>Url:</b> \$url 
-          <b>Facteur:</b> \$facteur
+          <b>Url:</b> \$url <br>
+          <b>Score:</b> \$facteur
           <b>Last update:</b> \$last_update 
-    </font>
-</p>
+</div>
 "';
 
 # For categorie, you can use:

@@ -4,6 +4,16 @@ package Search::Circa::Search;
 # Copyright 2000 A.Barbet alian@alianwebserver.com.  All rights reserved.
 
 # $Log: Search.pm,v $
+# Revision 1.21  2002/12/29 03:18:37  alian
+# Update POD documentation
+#
+# Revision 1.20  2002/12/28 12:37:47  alian
+# - Ajout phase privilegiant le et (+nb mots*100 au score si tous les mots trouves dans le doc)
+# - Affichage que de 20 liens suivants / precedant
+#
+# Revision 1.19  2002/12/27 12:54:48  alian
+# Use template from conf
+#
 # Revision 1.18  2002/08/17 18:19:02  alian
 # - Minor changes to all code suite to tests
 #
@@ -24,15 +34,7 @@ require Exporter;
 
 @ISA = qw(Exporter Search::Circa);
 @EXPORT = qw();
-$VERSION = ('$Revision: 1.18 $ ' =~ /(\d+\.\d+)/)[0];
-
-# -------------------
-# Template par defaut
-my $templateS='"<p>$indiceG - <a href=\"$url\"> $titre </a> $description <br>
-    <font class=\"small\"><b>Url:</b> $url <b>Facteur:</b> $facteur
-    <b>Last update:</b> $last_update </font></p>\n\n"';
-my $templateC='"<p><a href=\"$links\">$nom_complet</a><br></p>\n"';
-# -------------------
+$VERSION = ('$Revision: 1.21 $ ' =~ /(\d+\.\d+)/)[0];
 
 #------------------------------------------------------------------------------
 # new
@@ -55,11 +57,13 @@ sub search
   {
   my ($this,$template,$mots,$first,$idc,$langue,$Url,
       $create,$update,$categorie,$cgi)=@_;
+  $this->trace(5);
   $this->dbh->do("insert into ".$this->pre_tbl.$idc."stats ".
 			"(requete,quand) values('$mots',now())");
-  if (!$template) {$template=$templateS;}
+  if (!$template) {$template=$CircaConf::templateS;}
   my ($indice,$i,$tab,$nbPage,$links,$resultat,@ind_and,@ind_not,@mots_tmp)
     = (0,0);
+  my %rrr; $tab=\%rrr;
   $mots=~s/\'/ /g;
   $mots=~s/(\w)-(\w)/$1 + $2/;
   my @mots = split(/\s/,$mots);
@@ -74,11 +78,19 @@ sub search
   $tab=$this->search_word($tab,join("','",@mots_tmp),$idc,
 			  $langue,$Url,$create,$update,$categorie) ||
 			    return undef;
+
+  # On ajoute 100 au urls qui contiennent tous les mots demandes si nb mots > 1
+  if ($#mots>0) {
+    foreach my $url (keys %$tab) {
+      $$tab{$url}[2]+=(100*($#mots+1)) if ($#mots+1 == scalar @{$$tab{$url}[5]});
+    }
+  }
+
   # On supprime tout ceux qui ne repondent pas aux criteres and si present
   foreach my $ind (@ind_and) {
     foreach my $url (keys %$tab) {
       delete $$tab{$url} if 
-	(!$this->appartient($mots_tmp[$ind],@{$$tab{$url}[5]}));}}
+	(!$this->appartient($mots_tmp[$ind],@{$$tab{$url}[5]}));} }
 
   # On supprime tout ceux qui ne repondent pas aux criteres not si present
   foreach my $ind (@ind_not) {
@@ -95,35 +107,36 @@ sub search
 	       || $this->{nbResultPerPage};}
   else {$nbResultPerPage= $this->{nbResultPerPage};}
   my $lasto = $first + $nbResultPerPage;
-  foreach my $url (@key)
-     {
-     my ($titre,$description,$facteur,$langue,$last_update)=@{$$tab{$url}};
-     my $indiceG=$indice+1;
-     if (($indice>=$first)&&($indice<$lasto))
-      {
+  foreach my $url (@key) {
+    my ($titre,$description,$facteur,$langue,$last_update)=@{$$tab{$url}};
+    my $indiceG=$indice+1;
+    if (($indice>=$first)&&($indice<$lasto)) {
       if ($template) {$resultat.= eval $template;}
       else {$resultat.=$url."\t".$titre."\n";}
-      }
-     # Constitution des liens suivants / precedents
-    if (!($indice%$nbResultPerPage))
-      {
-      $nbPage++;
-      if ($indice==$first) {$links.="$nbPage- ";}
-      elsif ($ENV{"SCRIPT_NAME"}) 
-	{$links.='<a class="liens_suivant" href="'.
-	   $this->get_link($indice,$cgi).'">'.$nbPage.'</a>- '."\n";}
-      }
-    $indice++;
     }
+    # Constitution des liens suivants / precedents
+    if (!($indice%$nbResultPerPage)) {
+      $nbPage++;
+      if ($indice < ($first+($nbResultPerPage*10))
+	  and $indice > ($first-($nbResultPerPage*10))) {
+	if ($indice==$first) {$links.="$nbPage- ";}
+	elsif ($ENV{"SCRIPT_NAME"}) 
+	  {$links.='<a class="liens_suivant" href="'.
+	     $this->get_link($indice,$cgi).'">'.$nbPage.'</a>- '."\n";}
+      }
+    }
+    $indice++;
+  }
   if (@key==0) {$resultat="<p>Aucun document trouvé.</p>";}
   return ($resultat,$links,$indice);
-  }
+}
 
 #------------------------------------------------------------------------------
 # search_word
 #------------------------------------------------------------------------------
 sub search_word  {
   my ($self,$tab,$word,$idc,$langue,$Url,$create,$update,$categorie)=@_;
+  $self->trace(5);
   # Restriction diverses
   # Lang
   if ($langue) {$langue=" and langue='$langue' ";} else {$langue= ' ';}
@@ -347,16 +360,16 @@ Search::Circa::Search - Search interface on Circa, a www search engine running w
 
  use Search::Circa::Search;
  my $search = new Search::Circa::Search;
-
+ 
  # Connection à MySQL
- if (!$search->connect("aliansql","pass","my_database","localhost"))
-  {die "Erreur à la connection MySQL:$DBI::errstr\n";}
-
+ die "Erreur à la connection MySQL:$DBI::errstr\n"
+   if (!$search->connect);
+ 
  # Affichage d'un formulaire minimum
  print   header,
    $search->start_classic_html,
    $search->default_form;
-
+ 
  # Interrogation du moteur
  # Sites trouves, liens pages suivantes, nb pages trouvees
  my ($resultat,$links,$indice) = $search->search('informatique internet',0,1);
@@ -365,11 +378,7 @@ Search::Circa::Search - Search interface on Circa, a www search engine running w
 =head1 DESCRIPTION
 
 This is Search::Circa::Search, a module who provide functions to
-perform search on Circa, a www search engine running with
-Mysql. Circa is for your Web site, or for a list of sites.
-It indexes like Altavista does. It can read, add and
-parse all url's found in a page. It add url and word
-to MySQL for use it at search.
+perform search on Circa database
 
 Notes:
 
@@ -387,10 +396,6 @@ Search are case unsensitive (mmmh what my english ? ;-)
 
 Circa::Search work with Circa::Indexer result. Circa::Search is a Perl 
 interface, but it's exist on this package a PHP client too.
-
-=head1 VERSION
-
-$Revision: 1.18 $
 
 =head1 Class Interface
 
@@ -649,6 +654,16 @@ Retourne le buffer HTML correspondant à la liste des langues disponibles
 Retourne le nom du site dans la table responsable correspondant à l'id $id
 
 =back
+
+=head1 VERSION
+
+$Revision: 1.21 $
+
+=head1 SEE ALSO
+
+L<Search::Circa>, Root class for circa
+
+L<circa_search>, command line script to perform search
 
 =head1 AUTHOR
 

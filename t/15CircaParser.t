@@ -1,13 +1,16 @@
 #!/usr/bin/perl -Tw
 use strict;
-use Test::More tests => 18;
+my $nt=17;
+use Test::More;
 use Search::Circa::Indexer;
 $|=1;
 
 $ENV{PATH}=''; $ENV{ENV}='';
-
+my @lu = qw!http://www.yahoo.fr file:///usr/share/ ftp://ftp.oleane.fr/
+            https://www.totor.com http://localhost?toto=cgi$cavapasnon!;
+plan tests => $nt+($#lu+1)*2;
  SKIP: {
-  skip('No advanced test asked', 18)
+  skip('No advanced test asked', $nt)
     if (! -e ".t");
 
   #
@@ -22,7 +25,7 @@ $ENV{PATH}=''; $ENV{ENV}='';
   #$circa->{DEBUG}=4;
   my %url = 
     (
-     'url'              => 'http://www.1001cartes.com',
+     'url'              => 'http://www.1001cartes.com/perso/',
      'local_url'        => 'file://usr/local/apache/htdocs',
      'browse_categorie' => '1',
      'niveau'           => '0',
@@ -47,6 +50,12 @@ $ENV{PATH}=''; $ENV{ENV}='';
 	"Search::Circa::Parser->check_links $_");
   }
 
-  ok ($circa->Parser->look_at($url{url}, $url{id}, $id),
-      "Search::Circa::Parser->look at");
+  foreach my $e (@lu) {
+    my %url2 = %url;
+    $url2{'url'} = $e;
+      $url2{'id'} = $circa->URL->add($id,%url2);
+    ok( $url2{'id'}, "Search::Circa::url->add $e");
+    my @l = $circa->Parser->look_at($url2{'url'},$url2{'id'},$id);
+    ok (@l , "Search::Circa::Parser->look at defined $e");
+  }
 }

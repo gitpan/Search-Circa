@@ -4,31 +4,23 @@ package Search::Circa::Indexer;
 # Copyright 2000 A.Barbet alian@alianwebserver.com.  All rights reserved.
 
 # $Log: Indexer.pm,v $
-# Revision 1.31  2002/08/19 11:47:05  alian
-# -Change guess of mysql bin path
+# Revision 1.37  2002/12/29 14:35:09  alian
+# Some minor fixe suite to last update
 #
-# Revision 1.30  2002/08/15 23:10:11  alian
-# Minor changes to all code suite to tests. Try to adopt generic return
-# code for all method: undef on error, 0 on no result, ...
+# Revision 1.36  2002/12/29 13:55:17  alian
+# Another update of pod documentation
 #
-# Revision 1.29  2002/03/18 21:56:02  alian
-# - Ensemble de correction de bug mineurs
+# Revision 1.35  2002/12/29 03:18:37  alian
+# Update POD documentation
 #
-# Revision 1.28  2001/10/28 15:51:11  alian
-# - Add exportId (one account) feature
+# Revision 1.34  2002/12/29 00:45:50  alian
+# Don't use last_update with parse_new
 #
-# Revision 1.27  2001/10/27 20:50:25  alian
-# Correct bug for local url
+# Revision 1.33  2002/12/28 22:25:03  alian
+# Merge addSite / addLocaleSite, use hash for parameters
 #
-# Revision 1.26  2001/10/07 12:04:03  alian
-# - Prise en compte du host pour l'import/export
-#
-# Revision 1.25  2001/09/23 10:39:34  alian
-# - Ajout de messages suppl. si export echoue
-#
-# Revision 1.24  2001/08/29 17:45:32  alian
-# - Correction d'un bug lors de l'affichage d'erreur Mysql dans
-# get_liste_liens
+# Revision 1.32  2002/12/27 12:56:16  alian
+# Add cleandb method
 
 use strict;
 use DBI;
@@ -40,59 +32,41 @@ require Exporter;
 
 @ISA = qw(Exporter Search::Circa);
 @EXPORT = qw();
-$VERSION = ('$Revision: 1.31 $ ' =~ /(\d+\.\d+)/)[0];
-
-########## CONFIG  ##########
-my %ConfigMoteurDefault=(
-  'author'    => 'circa@alianwebserver.com', # Responsable du moteur
-  'temporate'     => 1,  # Temporise les requetes sur le serveur de 8s.
-  'facteur_keyword'  => 15, # <meta name="KeyWords"
-  'facteur_description'  => 10, # <meta name="description"
-  'facteur_titre'    => 10, # <title></title>
-  'facteur_full_text'  => 1,  # reste
-  'facteur_url' => 15, # Mots trouvés dans l'url
-  'nb_min_mots'    => 2,  # facteur min pour garder un mot
-  'niveau_max'    => 7,  # Niveau max à indexer
-  'indexCgi'    => 0,  # Suit les différents liens des CGI (ex: ?nom=toto&riri=eieiei)
-  );
+$VERSION = ('$Revision: 1.37 $ ' =~ /(\d+\.\d+)/)[0];
 
 # Path of mysql binary
 my @path_mysql = qw!/usr/bin /usr/local/bin /opt/bin /opt/local/bin 
                     /usr/pkg/bin /usr/local/mysql/bin /opt/mysql/bin!;
 push(@path_mysql, split(/:/,$ENV{PATH})) if ($ENV{PATH});
 
-########## FIN CONFIG  ##########
 
 #------------------------------------------------------------------------------
 # new
 #------------------------------------------------------------------------------
-sub new 
-  {
-    my $class = shift;
-    my $self = $class->SUPER::new;
-    bless $self, $class;
-    $self->{SIZE_MAX}     = 1000000;  # Size max of file read
-    $self->{HOST_INDEXED} = undef;
-    $self->{PROXY} = undef;
-    $self->{ConfigMoteur} = \%ConfigMoteurDefault;
-    if (@_)
-      {
-	my %vars =@_;
-	while (my($n,$v)= each (%vars)) 
-		{$self->{'ConfigMoteur'}{$n}=$v;}
-      }
-    return $self;
+sub new  {
+  my $class = shift;
+  my $self = $class->SUPER::new;
+  bless $self, $class;
+  $self->{SIZE_MAX}     = 1000000;  # Size max of file read
+  $self->{HOST_INDEXED} = undef;
+  $self->{PROXY} = undef;
+  $self->{ConfigMoteur} = \%CircaConf::conf;
+  if (@_) {
+    my %vars =@_;
+    while (my($n,$v)= each (%vars)) 
+      {$self->{'ConfigMoteur'}{$n}=$v;}
   }
+  return $self;
+}
 
 #------------------------------------------------------------------------------
 #
 #------------------------------------------------------------------------------
-sub connect 
-  { 
-    my $self=shift;
-    $self->{PARSER} = Search::Circa::Parser->new($self);
-    return $self->SUPER::connect(@_);
-  }
+sub connect  {
+  my $self=shift;
+  $self->{PARSER} = Search::Circa::Parser->new($self);
+  return $self->SUPER::connect(@_);
+}
 
 #------------------------------------------------------------------------------
 #
@@ -102,22 +76,44 @@ sub Parser { return $_[0]->{PARSER}; }
 #------------------------------------------------------------------------------
 # size_max
 #------------------------------------------------------------------------------
-sub size_max
-  {
+sub size_max  {
   my $self = shift;
   if (@_) {$self->{SIZE_MAX}=shift;}
   return $self->{SIZE_MAX};
-  }
+}
+
+#------------------------------------------------------------------------------
+# cleandb
+#------------------------------------------------------------------------------
+sub cleandb  {
+  my $self = shift;
+  my $id = shift;
+  my $r = 1;
+  my ($x) = ($self->fetch_first
+    ("select count(*) from ".$self->pre_tbl.$id."links ".
+     "where parse='1' and valide ='1'"))/2;
+  if ($x !=0) {
+    my $requete = "select mot,count(1) from ".
+    $self->pre_tbl.$id."relation r group by r.mot order by 2 desc limit 200";
+    my $sth = $self->{DBH}->prepare($requete);
+    $sth->execute;
+    while (my ($word,$nb)=$sth->fetchrow_array) {
+      $self->{DBH}->do("delete from ".$self->pre_tbl.$id."relation ".
+		       "where mot = '$word'") if ($nb>$x);
+    }
+    $sth->finish;
+    return $r;
+  } else { return 0;}
+}
 
 #------------------------------------------------------------------------------
 # host_indexed
 #------------------------------------------------------------------------------
-sub host_indexed
-  {
+sub host_indexed  {
   my $self = shift;
   if (@_) {$self->{HOST_INDEXED}=shift;}
   return $self->{HOST_INDEXED};
-  }
+}
 
 #------------------------------------------------------------------------------
 # set_host_indexed
@@ -136,83 +132,59 @@ sub set_host_indexed
 #------------------------------------------------------------------------------
 # proxy
 #------------------------------------------------------------------------------
-sub proxy
-  {
+sub proxy  {
   my $self = shift;
   if (@_) {$self->{PROXY}=shift;}
   return $self->{PROXY};
-  }
+}
 
 #------------------------------------------------------------------------------
 # addSite
 #------------------------------------------------------------------------------
-sub addSite
-  {
-    my ($self,$url,$email,$titre,$categorieAuto,$cgi,$rep,$file)=@_;
-    #print "$url,$email,$titre,$categorieAuto,$cgi,$rep,$file\n";
-    if ($cgi && $cgi->param('file')) {
-      $file=$cgi->param('file');
-      my $tmpfile=$cgi->tmpFileName($file); # chemin du fichier temp
-      if ($file=~/.*\\(.*)$/) {$file=$1;}
-      my $fileC=$file;
-      $file = $rep.$file;
-      use File::Copy;
-      copy($tmpfile,$file) 
-	|| die "Impossible de creer $file avec $tmpfile:$!\n<br>";
-    }
-    if (!$email) {$email='Inconnu';}
-    if (!$titre) {$titre='Non fourni';}
-    if (!$file) {$file=' ';}
-    if (!$categorieAuto) {$categorieAuto=0;}
-    my $sth = $self->{DBH}->prepare("
-         insert into ".$self->pre_tbl."responsable
-                   (email,titre,categorieAuto,masque) 
-         values ('$email','$titre',$categorieAuto,'$file')");
-  $sth->execute || print "Erreur: $DBI::errstr<br>\n";
+sub addSite  {
+  my ($self,$rc)=@_;
+  #print "$url,$email,$titre,$categorieAuto,$cgi,$rep,$file\n";
+  my $file = $rc->{masque} || ' ';
+  if ($rc->{cgi} and $rc->{cgi}->param('file')) {
+    $file=$rc->{cgi}->param('file');
+    my $tmpfile=$rc->{cgi}->tmpFileName($file); # chemin du fichier temp
+    if ($file=~/.*\\(.*)$/) {$file=$1;}
+    $file = $CircaConf::TemplateDir.$file;
+    use File::Copy;
+    copy($tmpfile,$file)
+      or die "Impossible de creer $file avec $tmpfile:$!\n<br>";
+  }
+  if (!$rc->{email}) {$rc->{email}='Inconnu';}
+  if (!$rc->{titre}) {$rc->{titre}='Non fourni';}
+  if (!$rc->{categorieAuto}) {$rc->{categorieAuto}=0;}
+
+  my $requete = "
+insert into ".$self->pre_tbl."responsable (email,titre,categorieAuto,masque)
+values ('$rc->{email}',
+        '$rc->{titre}',
+        '$rc->{categorieAuto}',
+        '$file')";
+  my $sth = $self->{DBH}->prepare($requete);
+  $sth->execute || $self->trace(3, $DBI::errstr.$requete);
   $sth->finish;
-  $self->create_table_circa_id($sth->{'mysql_insertid'});
-  $self->URL->add($sth->{'mysql_insertid'},(url => $url, valide =>1))
-    || print $DBI::errstr,"\n";
-  return $sth->{'mysql_insertid'};
+  my $id = $sth->{'mysql_insertid'};
+  $self->create_table_circa_id($id);
+  my %h = (url => $rc->{url}, valide =>1);
+
+  # Site avec double url
+  # Params orig, dest
+  if ($rc->{orig}) {
+    $h{urllocal} = $rc->{url};
+    $h{urllocal}=~s/$rc->{dest}/$rc->{orig}/;
+    my $requete = "insert into ".$self->pre_tbl."local_url
+                   values($id,'$rc->{orig}','$rc->{dest}')";
+    $self->trace(3, $requete);
+    $self->{DBH}->do($requete);
   }
 
-#------------------------------------------------------------------------------
-# addLocalSite
-#------------------------------------------------------------------------------
-sub addLocalSite
-  {
-    my ($self,$url,$email,$titre,$local_url,$path,$urlRacine,
-	$categorieAuto,$cgi,$rep,$file)=@_;
-    if ($#_<7) 
-	{ die "Usage Circa::Indexer::addLocalSite(>=8 args):\n".
-	    "\tUrl, Email, Titre, local url, path, url racine, categorieAuto\n";}
-    if ($cgi)
-      {
-	$file=$cgi->param('file');
-	my $tmpfile=$cgi->tmpFileName($file); # chemin du fichier temp
-	if ($file=~/.*\\(.*)$/) {$file=$1;}
-	my $fileC=$file;
-	$file = $rep.$file;
-	use File::Copy;
-	copy($tmpfile,$file) 
-	  || die "Impossible de creer $file avec $tmpfile:$!\n<br>";
-      }
-    my $sth = $self->{DBH}->prepare("
-              insert into ".$self->pre_tbl."responsable
-                  (email,titre,categorieAuto) 
-              values('$email','$titre',$categorieAuto)");
-    $sth->execute || print "Erreur: $DBI::errstr<br>\n";
-    $sth->finish;
-    my $id = $sth->{'mysql_insertid'};
-    $self->{DBH}->do("insert into ".$self->pre_tbl."local_url 
-                      values($id,'$path','$urlRacine');");
-    $self->create_table_circa_id($sth->{'mysql_insertid'});
-    $self->URL->add($id,(url      => $url, 
-				 urllocal => $local_url, 
-				 valide   => 1))
-	|| print "Erreur: $DBI::errstr<br>\n";
-    return $id;
-  }
+  $self->URL->add($id,%h);
+  return $id;
+}
 
 #------------------------------------------------------------------------------
 # parse_new_url
@@ -224,15 +196,16 @@ sub parse_new_url
     my ($nb,$nbAjout,$nbWords,$nbWordsGood)=(0,0,0,0);
     my $tab = $self->URL->need_parser($idp);
     my $categorieAuto = $self->categorie->auto($idp);
+  $self->Parser->{toindex} = scalar keys %{$tab};
+  $self->Parser->{inindex} =  0;
+
     foreach my $id (keys %$tab) 
       {
+    $self->Parser->{inindex}++;
 	my ($url,$local_url,$niveau,$categorie,$lu)=$$tab{$id};
 	my ($res,$nbw,$nbwg) = 
 	  $self->Parser->look_at
-	    (
-	     $$tab{$id}[0],$id,$idp,				 
-	     ($$tab{$id}[4]||undef), 
-	     ($$tab{$id}[1]||undef),				 
+	    ($$tab{$id}[0],$id,$idp,undef, ($$tab{$id}[1]||undef),
 	     $categorieAuto, $$tab{$id}[2], $$tab{$id}[3]);
 	if ($res==-1) {$self->URL->non_valide($idp,$id);}
 	else {$nbAjout+=$res;$nbWords+=$nbw;$nb++;$nbWordsGood+=$nbwg;}
@@ -244,26 +217,27 @@ sub parse_new_url
 #------------------------------------------------------------------------------
 # update
 #------------------------------------------------------------------------------
-sub update
-  {
-    my ($this,$xj,$idp)=@_;
-    $idp = 1 if (!$idp);
-    $this->parse_new_url($idp);  
-    my ($nb,$nbAjout,$nbWords,$nbWordsGood)=(0,0,0,0);
-    my $tab = $this->URL->need_update($idp,$xj);
-    my $categorieAuto = $this->categorie->auto($idp);
-    foreach my $id (keys %$tab) 
-      {
-	my ($url,$local_url,$niveau,$categorie,$lu) = $$tab{$id};
-	my ($res,$nbw,$nbwg) = 
-	  $this->Parser->look_at($$tab{$id}[0],$id,$idp,
-				 $$tab{$id}[4] || undef, $$tab{$id}[1] ||undef,
-				 $categorieAuto, $$tab{$id}[2], $$tab{$id}[3]);
-	if ($res==-1) {$this->URL->non_valide($idp,$id);}
-	else {$nbAjout+=$res;$nbWords+=$nbw;$nb++;$nbWordsGood+=$nbwg;}
-      }
-    return ($nb,$nbAjout,$nbWords,$nbWordsGood);
+sub update {
+  my ($this,$xj,$idp)=@_;
+  $idp = 1 if (!$idp);
+  $this->parse_new_url($idp);  
+  my ($nb,$nbAjout,$nbWords,$nbWordsGood)=(0,0,0,0);
+  my $tab = $this->URL->need_update($idp,$xj);
+  my $categorieAuto = $this->categorie->auto($idp);
+  $this->Parser->{toindex} = scalar keys %{$tab};
+  $this->Parser->{inindex} =  0;
+  foreach my $id (keys %$tab) {
+    $this->Parser->{inindex}++;
+    my ($url,$local_url,$niveau,$categorie,$lu) = $$tab{$id};
+    my ($res,$nbw,$nbwg) = 
+      $this->Parser->look_at($$tab{$id}[0],$id,$idp,
+			       $$tab{$id}[4] || undef, $$tab{$id}[1] ||undef,
+			     $categorieAuto, $$tab{$id}[2], $$tab{$id}[3]);
+    if ($res==-1) {$this->URL->non_valide($idp,$id);}
+    else {$nbAjout+=$res;$nbWords+=$nbw;$nb++;$nbWordsGood+=$nbwg;}
   }
+  return ($nb,$nbAjout,$nbWords,$nbWordsGood);
+}
 
 #------------------------------------------------------------------------------
 # create_table_circa
@@ -337,6 +311,9 @@ sub drop_table_circa_id
   $self->{DBH}->do("drop table ".$self->pre_tbl.$id."relation")
     || return 0;
   $self->{DBH}->do("drop table ".$self->pre_tbl.$id."stats")
+    || return 0;
+ $self->{DBH}->do
+    ("delete from ".$self->pre_tbl."local_url where id=$id")
     || return 0;
   $self->{DBH}->do
     ("delete from ".$self->pre_tbl."responsable where id=$id")
@@ -525,8 +502,10 @@ sub admin_compte
   if (!$rep{'responsable'}) {return (undef);}
   # First url added
   ($rep{'racine'})=$self->fetch_first("select min(id) from ".$pre."links");
-  ($rep{'racine'})=$self->fetch_first("select url from ".$pre."links ".
+  if ($rep{'racine'}) {
+    ($rep{'racine'})=$self->fetch_first("select url from ".$pre."links ".
 				  "where id=".$rep{'racine'});
+  }
   # Number of links
   ($rep{'nb_links'}) = $self->fetch_first("select count(1) from ".$pre."links");
   # Number of parsed links
@@ -548,6 +527,9 @@ sub admin_compte
   # Number of word
   ($rep{"nb_words"}) = 
     $self->fetch_first("select count(1) from ".$pre."relation");
+  ($rep{"orig"},$rep{"dest"}) = 
+    $self->fetch_first("select path, url from ".$self->pre_tbl."local_url ".
+		       "where id = $compte");
   # Return reference of hash
   return \%rep;
   }
@@ -756,27 +738,27 @@ a www search engine running with Mysql
 
  use Circa::Indexer;
  my $indexor = new Circa::Indexer;
-
- if (!$indexor->connect_mysql($user,$pass,$db))
-  {die "Erreur à la connection MySQL:$DBI::errstr\n";}
-
+ 
+ die "Erreur à la connection MySQL:$DBI::errstr\n"
+   if (!$indexor->connect);
+ 
  $indexor->create_table_circa;
-
+ 
  $indexor->drop_table_circa;
-
- $indexor->addSite("http://www.alianwebserver.com/",
-                   'alian@alianwebserver.com',
-                   "Alian Web Server");
-
+ 
+ $indexor->addSite({url   => "http://www.alianwebserver.com/",
+                    email => 'alian@alianwebserver.com',
+                    title => "Alian Web Server"});
+ 
  my ($nbIndexe,$nbAjoute,$nbWords,$nbWordsGood) = $indexor->parse_new_url(1);
  print   "$nbIndexe pages indexées,"
    "$nbAjoute pages ajoutées,"
    "$nbWordsGood mots indexés,"
    "$nbWords mots lus\n";
-
+ 
  $indexor->update(30,1);
 
-Look in admin.pl,admin.cgi,admin_compte.cgi
+Look too in L<circa_admin>,admin.cgi,admin_compte.cgi
 
 =head1 DESCRIPTION
 
@@ -824,105 +806,6 @@ Weight for each word is in hash $ConfigMoteur
 
 =back
 
-=head2 Features ?
-
-Features
-
-=over
-
-=item *
-
-Search Features
-
-=over
-
-=item *
-
-Boolean query language support : or (default) and ("+") not ("-"). Ex perl + faq -cgi :
-Documents with faq, eventually perl and not cgi.
-
-=item *
-
-Client Perl or PHP
-
-=item *
-
-Can browse site by directory / rubrique.
-
-=item *
-
-Search for different criteria: news, last modified date, language, URL / site.
-
-=back
-
-=item *
-
-Full text indexing
-
-=item *
-
-Different weights for title, keywords, description and rest of page HTML read can be given in configuration
-
-=item *
-
-Herite from features of LWP suite:
-
-=over
-
-=item *
-
-Support protocol HTTP://,FTP://, FILE:// (Can do indexation of filesystem without talk to Web Server)
-
-=item *
-
-Full support of standard robots exclusion (robots.txt). Identification with
-CircaIndexer/0.1, mail alian@alianwebserver.com. Delay requests to
-the same server for 8 secondes. "It's not a bug, it's a feature!" Basic
-rule for HTTP serveur load.
-
-=item *
-
-Support proxy HTTP.
-
-=back
-
-=item *
-
-Make index in MySQL
-
-=item *
-
-Read HTML and full text plain
-
-=item *
-
-Several kinds of indexing : full, incremental, only on a particular server.
-
-=item *
-
-Documents not updated are not reindexed.
-
-=item *
-
-All requests for a file are made first with a head http request, for information
-such as validate, last update, size, etc.Size of documents read can be
-restricted (Ex: don't get all documents > 5 MB). For use with low-bandwidth
-connections, or computers which do not have much memory.
-
-=item *
-
-HTML template can be easily customized for your needs.
-
-=item *
-
-Admin functions available by browser interface or command-line.
-
-=item *
-
-Index the different links found in a CGI (all after name_of_file?)
-
-=back
-
 =head2 How it's work ?
 
 Circa parse html document. convert it to text. It count all
@@ -931,6 +814,8 @@ it read title, keywords, description and add a weight to
 all word found.
 
 Example:
+A config:
+
  my %ConfigMoteur=(
   'author'              => 'circa@alianwebserver.com', # Responsable du moteur
   'temporate'           => 1,  # Temporise les requetes sur le serveur de 8s.
@@ -943,6 +828,8 @@ Example:
   'niveau_max'          => 7,  # Niveau max à indexer
   'indexCgi'            => 0,  # Index lien des CGI (ex: ?nom=toto&riri=eieiei)
   );
+
+A html document:
 
  <html>
  <head>
@@ -972,17 +859,13 @@ relation.
 After page is read, it's look into html link. And so on. At each time, the level
 grow to one. So if < to $Config{'niveau_max'}, url is added.
 
-=head1 VERSION
-
-$Revision: 1.31 $
-
 =head1 Class Interface
 
 =head2 Constructors and Instance Methods
 
 =over
 
-=item new    [PARAMHASH]
+=item B<new> I<PARAMHASH>
 
 You can use the following keys in PARAMHASH:
 
@@ -1033,20 +916,20 @@ Default 0, follow of not links of CGI (ex: ?nom=toto&riri=eieiei)
 
 =back
 
-=item size_max($size)
+=item B<size_max> I<size>
 
 Get or set size max of file read by indexer (For avoid memory pb).
 
-=item host_indexed($host)
+=item B<host_indexed> I<host>
 
 Get or set the host indexed.
 
-=item set_host_indexed($url)
+=item B<set_host_indexed> I<url>
 
 Set base directory with $url. It's used for restrict access
 only to files found on sub-directory on this serveur.
 
-=item proxy($adr_proxy)
+=item B<proxy> I<adresse proxy>
 
 Get or set proxy for LWP::Robot or LWP::Agent
 
@@ -1058,20 +941,14 @@ Ex: $circa->proxy('http://proxy.sn.no:8001/');
 
 =over
 
-=item addSite($url,$email,$titre,$categorieAuto,$cgi,$rep,$file);
+=item B<addSite> I<ref_hash>
 
-Ajoute le site d'url $url, responsable d'adresse mail $email à la bd de Circa
-Retourne l'id du compte cree
+I<ref_hash> can have these keys: url, email, title, categorieAuto,
+cgi, rep, file
 
-Create account for url $url. Return id of account created.
+Create account with first url I<url>. Return id of account created
 
-
-=item addLocalSite($url,$email,$titre,$local_url,$path,
-                   $urlRacine,$categorieAuto,$cgi,$rep,$file);
-
-Add a local $url.Return id of account on success, undef else.
-
-=item parse_new_url($idp)
+=item B<parse_new_url> I<id account>
 
 Parse les pages qui viennent d'être ajoutée. Le programme va analyser toutes
 les pages dont la colonne 'parse' est égale à 0.
@@ -1079,10 +956,10 @@ les pages dont la colonne 'parse' est égale à 0.
 Retourne le nombre de pages analysées, le nombre de page ajoutées, le
 nombre de mots indexés.
 
-=item update($xj,[$idp])
+=item B<update> I<nb days, id account>
 
-Update url not visited since $xj days for account $idp. If idp is not
-given, 1 will be used. Url never parsed will be indexed.
+Update url not visited since I<nb days> for account I<id account>.
+If idp is not given, 1 will be used. Url never parsed will be indexed.
 
 Return ($nb,$nbAjout,$nbWords,$nbWordsGood)
 
@@ -1108,7 +985,7 @@ $nbWordsGood: Number of word added
 
 =cut
 
-=item create_table_circa
+=item B<create_table_circa>
 
 Create tables needed by Circa - Cree les tables necessaires à Circa:
 
@@ -1138,19 +1015,19 @@ inscription : Inscriptions temporaires
 
 =cut
 
-=item drop_table_circa
+=item B<drop_table_circa>
 
 Drop all table in Circa ! Be careful ! - Detruit touted les tables de Circa
 
 =cut
 
-=item drop_table_circa_id($id)
+=item B<drop_table_circa_id> I<id account>
 
 Detruit les tables de Circa pour l'utilisateur $id
 
 =cut
 
-=item create_table_circa_id($id)
+=item B<create_table_circa_id> I<id account>
 
 Create tables needed by Circa for instance $id:
 
@@ -1174,25 +1051,26 @@ stats   : Liste des requetes
 
 =back
 
-=item export([$mysqldump], [$path])
+=item B<export> I<[mysqldump], [directory of export]>
 
-Export data from Mysql in $path/circa.sql
+Export data from Mysql in I<directory of export>/circa.sql with
+I<mysqldump>.
 
-$mysqldump: path of bin of mysqldump. If not given, search in /usr/bin/mysqldump,
-/usr/local/bin/mysqldump, /opt/bin/mysqldump.
+I<mysqldump>: path of bin of mysqldump. If not given, search in 
+/usr/bin/mysqldump, /usr/local/bin/mysqldump, /opt/bin/mysqldump.
 
-$path: path of directory where circa.sql will be created. If not given,
-create it in current directory.
+<directory of export>: path of directory where circa.sql will be created.
+If not given, create it in $CircaConf::export, else in /tmp directory.
 
-=item import_data([$mysql], [$path])
+=item B<import_data> I<[path_of_bin_mysql], [path_of_circa_file]>
 
 Import data in Mysql from circa.sql
 
-$mysql : path of bin of mysql. If not given, search in /usr/bin/mysql,
-/usr/local/bin/mysql, /opt/bin/mysql
+I<path_of_bin_mysql> : path to reach bin of mysql. If not given, search in 
+/usr/bin/mysql, /usr/local/bin/mysql, /opt/bin/mysql, ENV{PATH}
 
-$path: path of directory where circa.sql will be read. If not given,
-read it from current directory.
+I<path_of_circa_file> : path of directory where circa.sql will be read.
+If not given, read it from $CircaConf::export, else /tmp directory.
 
 =back
 
@@ -1200,7 +1078,7 @@ read it from current directory.
 
 =over
 
-=item admin_compte($compte)
+=item B<admin_compte> I<id account>
 
 Return list about account $compte
 
@@ -1238,16 +1116,16 @@ $racine  : First page added - 1ere page inscrite
 
 =back
 
-=item most_popular_word($max,$id)
+=item B<most_popular_word> I<nb item to display, id account>
 
 Retourne la reference vers un hash representant la liste
 des $max mots les plus présents dans la base de reponsable $id
 
-=item stat_request($id)
+=item B<stat_request> I<id account>
 
 Return some statistics about request make on Circa
 
-=item inscription($email,$url,$titre)
+=item B<inscription> I<email, url, titre>
 
 Inscrit un site dans une table temporaire
 
@@ -1257,37 +1135,49 @@ Inscrit un site dans une table temporaire
 
 =over
 
-=item header_compte
+=item B<header_compte>
 
 Function use with CGI admin_compte.cgi. Display list of features of 
 admin_compte.cgi with this account
 
-=item get_liste_liens($id)
+=item B<get_liste_liens> I<id account>
 
 Rend un buffer contenant une balise select initialisée avec les données
 de la table links responsable $id
 
-=item get_liste_liens_a_valider($id)
+=item B<get_liste_liens_a_valider> I<id account>
 
 Rend un buffer contenant une balise select initialisée avec les données
 de la table links responsable $id liens non valides
 
-=item get_liste_site
+=item B<get_liste_site>
 
 Rend un buffer contenant une balise select initialisée avec les données
 de la table responsable
 
-=item get_liste_langues
+=item B<get_liste_langues>
 
 Rend un buffer contenant une balise select initialisée avec les données
 de la table responsable
 
-=item get_liste_mot
+=item B<get_liste_mot>
 
 Rend un buffer contenant une balise select initialisée avec les données
 de la table responsable
 
 =back
+
+=head1 SEE ALSO
+
+L<Search::Circa>, Root class for circa
+
+L<Search::Circa::Parser>, Manage Parser of Indexer
+
+L<circa_admin>, command line to use indexer
+
+=head1 VERSION
+
+$Revision: 1.37 $
 
 =head1 AUTHOR
 

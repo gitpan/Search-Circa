@@ -3,116 +3,49 @@
 <head>
 <title>Resultat sur Circa</title>
 <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<link rel="stylesheet" href="http://www.alianwebserver.com/styles/vert.css">
+<link rev="made" href="mailto:alian@alianwebserver.com">
 <style type="text/css">
 <!--
-body {
-  font-family: sans-serif;
-  color: black;
-  background: white;
-  margin-left : 0;
-  margin-top : 0;
-}
-th, td { /* ns 4 */
-  font-family: sans-serif;
-}
-a {font: bold; color:Navy;} 
-h1 { text-align: center }
-h2, h3, h4, h5, h6 { text-align: left }
-h1, h2, h3 { color: #005A9C; }
-h1 { font: bold 100% }
-h2 { margin:1em; font: bold 95% }
-h3 { font: 90%  }
-h4 { font: bold 85% }
-h5 { font: italic 85%  }
-h6 { text-align: right }
-ul,p { font: 80%;}
-li {margin:1em 0em 1em 1em;  }
-p { text-align:justify; margin:1em;}
-.p-liens {text-align:right;}
-TH {background :  #008080; color :  White;}
-TD {}
-.td-bord {background :  Navy; color :  White;}
-.small {font:70%; }
-.h2-sans-marge {margin:0; text-align:center;}
-.without-margin {margin:0,0,0,0;}
+.item {margin-top:1em;   }
+.copyright { text-align: right; }
 -->
 </style>
 </head>
-
-<body bgcolor="#FFFFFF">
-<table width="100%" cellpadding="0" cellspacing="0" border="0">
-  <tr>
-    <td width="8%" class="td-bord" align="left">&nbsp;</td>
-    <td width="22%"><img src="/circa/images/circa_logo1.gif" width="70" height="70"><img src="/circa/images/circa_logo2.gif" width="110" height="50">
-    </td>
-    <td width="62%"><? $titre ?><br>
-	 <table><tr>
-			<td><? $categories1 ?></td>
-			<td><? $categories2 ?></td>
-       </tr></table>
-    </td>
-    <td width="8%" class="td-bord">&nbsp;</td>
-  </tr>
-  <tr> 
-    <td width="8%" class="td-bord">&nbsp;</td>
-    <td colspan="2">&nbsp;</td>
-    <td width="8%" class="td-bord">&nbsp;</td>
-  </tr>
-  <tr> 
-    <td width="8%" class="td-bord">&nbsp;</td>
-    <td colspan="2">
-		<p><? $nb ?></p>
-		<ul><? $resultat ?></ul>
-    </td>
-    <td width="8%" class="td-bord">&nbsp;</td>
-  </tr>
-  <tr> 
-    <td width="8%" class="td-bord">&nbsp;</td>
-    <td colspan="2">
-      <table width="100%">
-        <tr> 
-          <td width="50%"> 
-            <form method="GET"  enctype="application/x-www-form-urlencoded"
-                  action="/cgi-bin/circa/search.cgi">
-              <table align=center cellpadding="0" cellspacing="0" border="0">
-                <tr> 
-                  <td> 
-                    <h2 class="h2-sans-marge">Nouvelle recherche</h2>
-                  </td>
-                </tr>
-                <tr> 
-                  <td> 
-                    <input type="text" name="word" value="<? $words ?>" size="15">
-                    <input type="hidden" name="id" value="<? $id ?>">
-                    <input type="hidden" name="categorie" >
-                    <input type="submit" name=".submit" value="go"><br>
-		        <select name="categorie">
-                   <option value="<? $categorie ?>">Dans cette catégorie</option>
-	             <option value="0">Dans tout le site</option>
-		        </select>
- 
-                  </td>
-                </tr>
-              </table>
-            </form>
-          </td>
-          <td width="50%">
-            <p class="p-liens"><? $listeLiensSuivPrec ?></p>
-          </td>
-        </tr>
-      </table>
-      </td>
-    <td width="8%" class="td-bord">&nbsp;</td>
-  </tr>
-  <tr> 
-    <td width="8%" class="td-bord">&nbsp;</td>
-    <td colspan="2"> 
-      <h6>&nbsp;</h6>
-      <h6> Powered by <a href="http://www.alianwebserver.com/circa" target="_blank">AlianWebServer</a> 
-      </h6>
-    </td>
-    <td width="8%" class="td-bord">&nbsp;</td>
-  </tr>
+<body>
+<h1><? $titre ?></h1>
+<div class="main">
+<img align="left" src="/circa/images/circa_logo1.gif" width="70" height="70">
+<img align="left" src="/circa/images/circa_logo2.gif" width="110" height="50">
+<h2><? $nb ?> sur <? $words ?></h2>
+<table>
+<tr>
+	<td><? $categories1 ?></td>
+	<td><? $categories2 ?></td>
+</tr>
 </table>
+<ul><? $resultat ?></ul>
+<hr>
+
+<form method="GET" enctype="application/x-www-form-urlencoded" action="/cgi-bin/circa/search.cgi">
+<table align=center cellpadding="0" cellspacing="0" border="0">
+<tr>
+<td><h2 class="h2-sans-marge">Nouvelle recherche</h2>
+    <input type="text" name="word" value="<? $words ?>">
+    <input type="hidden" name="id" value="<? $id ?>">
+    <input type="hidden" name="categorie" >
+    <input type="submit" name=".submit" value="go"><br>
+ <select name="categorie">
+ <option value="<? $categorie ?>">Dans cette catégorie</option>
+ <option value="0">Dans tout le site</option>
+ </select>
+</td>
+<td><div class="liens"><? $listeLiensSuivPrec ?></div></td></tr>
+</table>
+</form>
+<div class="copyright">
+Powered by <a href="http://www.alianwebserver.com/circa" target="_blank">AlianWebServer</a>
+</div>
+</div>
 </body>
 </html>
