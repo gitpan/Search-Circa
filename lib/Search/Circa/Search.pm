@@ -4,58 +4,15 @@ package Search::Circa::Search;
 # Copyright 2000 A.Barbet alian@alianwebserver.com.  All rights reserved.
 
 # $Log: Search.pm,v $
+# Revision 1.18  2002/08/17 18:19:02  alian
+# - Minor changes to all code suite to tests
+#
+# Revision 1.17  2001/11/19 11:38:23  alian
+# - Correction d'un bug sur l'analyse des mots and (cas ou + sur le premier
+# mot) ainsi +mot1 +mot2 = +mot2 +mot1
+#
 # Revision 1.16  2001/10/14 17:17:32  alian
 # - Suppression d'une trace oubliee sur les mots avec and
-#
-# Revision 1.15  2001/08/29 16:25:02  alian
-# - Remove get_liste_categorie_fils() routine (move in Categorie)
-# - Update POD documentation for new namespace
-#
-# Revision 1.14  2001/08/24 13:29:30  alian
-# - Renomme Circa::Search in Search::Circa::Search
-#
-# Revision 1.13  2001/06/02 08:17:22  alian
-# - Correct a bug in + and - search
-#
-# Revision 1.12  2001/05/28 23:58:24  alian
-# - Add link on name of categorie
-#
-# Revision 1.11  2001/05/23 00:05:42  alian
-# - Correct an another  bug in categories_in_categorie
-#
-# Revision 1.10  2001/05/22 23:26:45  alian
-# - Correct a bug in categories_in_categorie
-#
-# Revision 1.9  2001/05/21 22:47:40  alian
-# - Remove some method use in Search and Indexer and build 
-# a father class : Circa.pm
-#
-# Revision 1.8  2001/05/14 14:55:17  alian
-# - Move POD documentation at end of file
-# - Update some routine (trouble with CGI)
-# - Update getMasque routine. Return undef if no masque
-#
-# Revision 1.7  2001/04/15 13:35:46  alian
-# - Remove use CGI module, use as parameters
-#
-# Revision 1.6  2001/02/05 00:11:29  alian
-# - Add pod documentation
-# - Display sites in categories by page (as in search)
-# - Add request to stats table
-#
-# Revision 1.5  2000/11/23 22:53:57  Administrateur
-# Add use of template as parameter
-#
-# Revision 1.4  2000/09/28 15:56:32  Administrateur
-# - Update SQL search method
-# - Add + and - to syntax of word search
-# - Add search in one categorie only
-#
-# Revision 1.3  2000/09/25 21:39:44  Administrateur
-# - Update possibilities to browse several site on a same database
-# - Update navigation by category
-# - Use new MCD
-#
 
 use DBI;
 use Search::Circa;
@@ -67,7 +24,7 @@ require Exporter;
 
 @ISA = qw(Exporter Search::Circa);
 @EXPORT = qw();
-$VERSION = ('$Revision: 1.16 $ ' =~ /(\d+\.\d+)/)[0];
+$VERSION = ('$Revision: 1.18 $ ' =~ /(\d+\.\d+)/)[0];
 
 # -------------------
 # Template par defaut
@@ -111,16 +68,15 @@ sub search
     {
     if    ($_ eq '+') {push(@ind_and,$i);} # Reperage mots 'and'
     elsif ($_ eq '-') {push(@ind_not,$i);} # Reperage mots 'not'
-    else {push(@mots_tmp,$_);}
-    $i++;
+    else {push(@mots_tmp,$_); $i++;}
     }
   # Recherche SQL
   $tab=$this->search_word($tab,join("','",@mots_tmp),$idc,
-			  $langue,$Url,$create,$update,$categorie);
+			  $langue,$Url,$create,$update,$categorie) ||
+			    return undef;
   # On supprime tout ceux qui ne repondent pas aux criteres and si present
-  foreach my $ind (@ind_and) { 
+  foreach my $ind (@ind_and) {
     foreach my $url (keys %$tab) {
-   
       delete $$tab{$url} if 
 	(!$this->appartient($mots_tmp[$ind],@{$$tab{$url}[5]}));}}
 
@@ -166,8 +122,7 @@ sub search
 #------------------------------------------------------------------------------
 # search_word
 #------------------------------------------------------------------------------
-sub search_word
-  {
+sub search_word  {
   my ($self,$tab,$word,$idc,$langue,$Url,$create,$update,$categorie)=@_;
   # Restriction diverses
   # Lang
@@ -201,22 +156,29 @@ sub search_word
     and   r.mot in ('$word')
     $langue $Url $create $update $categorie
     order   by facteur desc";
-
+  $self->trace(3,"Search::Circa::Search::search_word $requete");
   my $sth = $self->dbh->prepare($requete);
   #print "requete:$requete\n";
-  $sth->execute() || print "Erreur $requete:$DBI::errstr\n";
-  while (my ($facteur,$url,$titre,$description,$langue,$last_update,$mot)
-	 =$sth->fetchrow_array)
-    {
-    $$tab{$url}[0]=$titre;
-    $$tab{$url}[1]=$description;
-    $$tab{$url}[2]+=$facteur;
-    $$tab{$url}[3]=$langue;
-    $$tab{$url}[4]=$last_update;
-    push(@{$$tab{$url}[5]},$mot);
+  if ($sth->execute()) {
+    my $nb=0;
+    while (my ($facteur,$url,$titre,$description,$langue,$last_update,$mot)
+	   =$sth->fetchrow_array) {
+      $$tab{$url}[0]=$titre;
+      $$tab{$url}[1]=$description;
+      $$tab{$url}[2]+=$facteur;
+      $$tab{$url}[3]=$langue;
+      $$tab{$url}[4]=$last_update;
+      push(@{$$tab{$url}[5]},$mot);
+      $nb++;
     }
-  return $tab;
+    $self->trace(3,"Search::Circa::Search::search_word $nb results");
+    return $tab;
+  }  else {
+    $self->trace(1,
+		 "Circa::Search->search word Erreur $requete:$DBI::errstr\n");
+    return undef;
   }
+}
 
 #------------------------------------------------------------------------------
 # get_link
@@ -428,7 +390,7 @@ interface, but it's exist on this package a PHP client too.
 
 =head1 VERSION
 
-$Revision: 1.16 $
+$Revision: 1.18 $
 
 =head1 Class Interface
 

@@ -5,6 +5,7 @@ package Search::Circa;
 
 use DBI;
 use DBI::DBD;
+use CircaConf;
 use Search::Circa::Categorie;
 use Search::Circa::Url;
 use strict;
@@ -14,7 +15,7 @@ require Exporter;
 
 @ISA = qw(Exporter);
 @EXPORT = qw();
-$VERSION = ('$Revision: 1.11 $ ' =~ /(\d+\.\d+)/)[0];
+$VERSION = ('$Revision: 1.14 $ ' =~ /(\d+\.\d+)/)[0];
 
 #------------------------------------------------------------------------------
 # new
@@ -54,9 +55,14 @@ sub pre_tbl
 #------------------------------------------------------------------------------
 # connect
 #------------------------------------------------------------------------------
-sub connect
-  {
+sub connect  {
   my ($this,$user,$password,$db,$server)=@_;
+  if (!$user and !$password and !$db and !$server) {
+    $user     = $this->{_USER}     || $CircaConf::User;
+    $password = $this->{_PASSWORD} || $CircaConf::Password;
+    $db       = $this->{_DB}       || $CircaConf::Database;
+    $server   = $this->{_HOST}     || $CircaConf::Host;
+  }
   $server = '127.0.0.1' if (!$server);
   my $driver = "DBI:mysql:database=$db;host=$server;port=".$this->port_mysql;
   $this->{_DB}=$db; $this->{_PASSWORD}=$password; $this->{_USER}=$user;
@@ -64,7 +70,7 @@ sub connect
   $this->{DBH} = DBI->connect($driver,$user,$password,{ PrintError => 0 }) 
     || return 0;
   return 1;
-  }
+}
 
 #------------------------------------------------------------------------------
 # close
@@ -104,11 +110,14 @@ sub start_classic_html
 #------------------------------------------------------------------------------
 # trace
 #------------------------------------------------------------------------------
-sub trace
-  {
-    my ($self, $level, $msg)=@_;
-    if ($self->{DEBUG} >= $level) { print STDERR $msg,"\n"; }
+sub trace  {
+  my ($self, $level, $msg)=@_;
+  if ($self->{DEBUG} >= $level) { 
+    if ($ENV{SERVER_NAME}) {
+      print STDERR $msg,"\n"; }
+    else { $msg,"\n"; }
   }
+}
 
 #------------------------------------------------------------------------------
 # header
@@ -140,10 +149,12 @@ sub fetch_first
   {
   my ($self,$requete)=@_;
   my $sth = $self->{DBH}->prepare($requete);
-  $sth->execute || print STDERR "Erreur:$requete:$DBI::errstr<br>";
-  # Pour chaque categorie
-  my @row = $sth->fetchrow_array;
-  $sth->finish;
+  my @row;
+  if ($sth->execute) {
+    # Pour chaque categorie
+    @row = $sth->fetchrow_array;
+    $sth->finish;
+  } else { $self->trace(1,"Erreur:$requete:$DBI::errstr<br>"); }
   if (wantarray()) { return @row; }
   else { return $row[0]; }
   }
@@ -154,6 +165,7 @@ sub fetch_first
 sub appartient
   {
   my ($self,$elem,@liste)=@_;
+  return 0 unless $elem;
   foreach (@liste) {return 1 if ($_ and $_ eq $elem);}
   return 0;
   }
@@ -230,7 +242,7 @@ a look in cgi-bin/
 
 Q: Where are global parameters to connect to Circa ?
 
-A: Use demo/CircaConf.pm file
+A: Use lib/CircaConf.pm file
 
 Q : What is an account for Circa ?
 
@@ -240,7 +252,7 @@ Q : How I begin with indexer ?
 
 A: May be something like this: 
 
-   $ ./demo/admin.pl +create +add=http://monsite.com +parse_new=1 +depth_max
+   $ circa_admin +create +add=http://monsite.com +parse_new=1 +depth_max
 
 Q : Did you succed to use Circa with mod_perl ?
 

@@ -2,13 +2,13 @@
 #
 # Simple perl example to interface with module Search::Circa::Indexer
 # Copyright 2000 A.Barbet alian@alianwebserver.com.  All rights reserved.
-# $Date: 2001/10/28 15:51:11 $
+# $Date: 2002/08/19 10:20:59 $
 #
 
 use strict;
 use Getopt::Long;
+use lib '/path/to/circa';
 use CircaConf;
-use lib $CircaConf::CircaDir;
 use Search::Circa::Indexer;
 
 my $indexor = new Search::Circa::Indexer(%CircaConf::conf);
@@ -34,7 +34,7 @@ GetOptions
    "exportId=s"  => \$exportId,
    "import"      => \$import,
    "drop_id=s"   => \$drop_id,
-   "debug=s"     => \$debug);
+   "debug=s"     => \$debug) || &usage();
 $indexor->{DEBUG}=$debug if ($debug);
 if (!$indexor->connect($CircaConf::User,
 			     $CircaConf::Password,
@@ -53,7 +53,9 @@ if ($add)
   {
   my @l=split(/,/,$add);
   if (!$l[1]) {$l[1]=1;}
-  ($indexor->add_site(@l) && print $l[0]," added\n" ) || print $DBI::errstr,"\n";
+  ($indexor->URL->add($l[1], (url => $l[0], valide =>1)) 
+			     && print $l[0]," added\n" ) 
+    || print $DBI::errstr,"\n";
   }
 # Add site
 if ($addSite)

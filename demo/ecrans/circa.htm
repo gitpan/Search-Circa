@@ -1,9 +1,7 @@
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN" "http://www.w3.org/TR/REC-html40/loose.dtd">
-<html><!-- #BeginTemplate "/Templates/circa.dwt" -->
+<html>
 <head>
-<!-- #BeginEditable "doctitle" --> 
 <title>Resultat sur Circa</title>
-<!-- #EndEditable --> 
 <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
 <style type="text/css">
 <!--
@@ -47,8 +45,11 @@ TD {}
     <td width="8%" class="td-bord" align="left">&nbsp;</td>
     <td width="22%"><img src="/circa/images/circa_logo1.gif" width="70" height="70"><img src="/circa/images/circa_logo2.gif" width="110" height="50">
     </td>
-    <td width="62%"><!-- #BeginEditable "titre" --> <? $titre ?><!-- #EndEditable --><br>
-    <table><tr><td><? $categories1 ?></td><td><? $categories2 ?></td></tr></table>
+    <td width="62%"><? $titre ?><br>
+	 <table><tr>
+			<td><? $categories1 ?></td>
+			<td><? $categories2 ?></td>
+       </tr></table>
     </td>
     <td width="8%" class="td-bord">&nbsp;</td>
   </tr>
@@ -59,14 +60,15 @@ TD {}
   </tr>
   <tr> 
     <td width="8%" class="td-bord">&nbsp;</td>
-    <td colspan="2"><!-- #BeginEditable "corps" --> 
-      <p><? $nb ?></p>
-     <ul><? $resultat ?></ul><!-- #EndEditable --></td>
+    <td colspan="2">
+		<p><? $nb ?></p>
+		<ul><? $resultat ?></ul>
+    </td>
     <td width="8%" class="td-bord">&nbsp;</td>
   </tr>
   <tr> 
     <td width="8%" class="td-bord">&nbsp;</td>
-    <td colspan="2"><!-- #BeginEditable "bas_page" -->
+    <td colspan="2">
       <table width="100%">
         <tr> 
           <td width="50%"> 
@@ -82,8 +84,13 @@ TD {}
                   <td> 
                     <input type="text" name="word" value="<? $words ?>" size="15">
                     <input type="hidden" name="id" value="<? $id ?>">
-                    <input type="hidden" name="categorie" value="<? $categorie ?>">
-                    <input type="submit" name=".submit" value="go">
+                    <input type="hidden" name="categorie" >
+                    <input type="submit" name=".submit" value="go"><br>
+		        <select name="categorie">
+                   <option value="<? $categorie ?>">Dans cette catégorie</option>
+	             <option value="0">Dans tout le site</option>
+		        </select>
+ 
                   </td>
                 </tr>
               </table>
@@ -94,7 +101,7 @@ TD {}
           </td>
         </tr>
       </table>
-      <!-- #EndEditable --></td>
+      </td>
     <td width="8%" class="td-bord">&nbsp;</td>
   </tr>
   <tr> 
@@ -108,4 +115,4 @@ TD {}
   </tr>
 </table>
 </body>
-<!-- #EndTemplate --></html>
+</html>

@@ -4,6 +4,12 @@ package Search::Circa::Annuaire;
 # Copyright 2000 A.Barbet alian@alianwebserver.com.  All rights reserved.
 
 # $Log: Annuaire.pm,v $
+# Revision 1.7  2002/08/19 10:17:13  alian
+# Correct bug in previous version: @l = ... || return undef
+#
+# Revision 1.6  2002/08/17 18:19:02  alian
+# - Minor changes to all code suite to tests
+#
 # Revision 1.5  2001/10/28 16:28:46  alian
 # - Add some debug info on level 3
 #
@@ -13,15 +19,6 @@ package Search::Circa::Annuaire;
 # Revision 1.3  2001/08/26 23:12:10  alian
 # - Add POD documentation
 # - Add CreateDirectory method
-#
-# Revision 1.2  2001/08/24 13:28:09  alian
-# - Correction pour permettre la navigation dynamique sur les categories
-# de l'annuaire
-#
-# Revision 1.1  2001/08/12 23:53:44  alian
-# - First release
-#
-#
 
 use strict;
 use DBI;
@@ -31,7 +28,7 @@ require Exporter;
 
 @ISA = qw(Exporter Search::Circa);
 @EXPORT = qw();
-$VERSION = ('$Revision: 1.5 $ ' =~ /(\d+\.\d+)/)[0];
+$VERSION = ('$Revision: 1.7 $ ' =~ /(\d+\.\d+)/)[0];
 
 # Default display of item link
 $Circa::Annuaire::Ts = 
@@ -105,23 +102,19 @@ sub create_annuaire
 #------------------------------------------------------------------------------
 # CreateDirectory
 #------------------------------------------------------------------------------
-sub CreateDirectory
-  {
-    my ($self, @l) = @_;
-    my $o;
-    foreach (@l)
-	{
-	  if ($_)
-	    {
-		$o.='/'.$_;		
-		if (!-e $o) 
-		  {
-		    print "Creation de $o\n";
-		    mkdir($o, 0755);
-		  }
-	    }
-	}
+sub CreateDirectory  {
+  my ($self, @l) = @_;
+  my $o;
+  foreach (@l) {
+    if ($_) {
+      $o.='/'.$_;		
+      if (!-e $o) {
+	print "Creation de $o\n";
+	mkdir($o, 0755);
+      }
+    }
   }
+}
 
 
 #------------------------------------------------------------------------------
@@ -134,23 +127,36 @@ sub GetContentOf
     if (!$id) {$id=1;}
     if (!$templateC) { $templateC = $Circa::Annuaire::Tc; }
     if (!$templateS) { $templateS = $Circa::Annuaire::Ts; }
+    $self->trace(3,"Search::Circa::Search->GetContentOf $id $categorie");
     my ($masque) = $self->categorie->get_masque($id,$categorie) || $masqueOrig;
-    $masque = $masqueOrig if (!-r $masque);
-    my ($titre,@cates) 
-      = $self->GetCategoriesOf($categorie,$id);
-    my ($sites,$liens) 
-      = $self->GetSitesOf($categorie,$id,$templateS,$first);
+    $masque = $masqueOrig if ((!$masque || !-r $masque) && $masqueOrig);
+    $masque = $CircaConf::TemplateDir."/circa.htm" 
+      if (!$masque or !-r $masque);
+    my @catess = $self->GetCategoriesOf($categorie,$id); 
+    return undef if (!@catess);
+    my $titre = shift @catess;
     if (!$titre) { $titre='';}
+    $self->trace(3,"Search::Circa::Search->GetContentOf $categorie => $titre");
+    my ($sites,$liens)
+      = $self->GetSitesOf($categorie,$id,$templateS,$first);
+    return undef if (!$sites and !$liens);
     # Substitution dans le template
+    my ($c1,$c2);
+    if (@catess) {
+      $c1 = join(' ',@catess[0..$#catess/2]) || ' ';
+      $c2 = join(' ',@catess[($#catess/2)+1..$#catess]) || ' ';
+    }
+    else { ($c1,$c2)=(' ',' '); }
+
     my %vars = 
-      ('resultat'    => $sites,
-       'categories1' => join(' ',@cates[0..$#cates/2]),
-       'categories2' => join(' ',@cates[($#cates/2)+1..$#cates]),
+      ('resultat'    => $sites || ' ',
+       'categories1' => $c1,
+       'categories2' => $c2,
        'titre'       => '<h3>Annuaire</h3>'
-       .'<p class="categorie">'.($titre).'</p>',
-       'listeLiensSuivPrec'=> $liens,
+       .'<p class="categorie">'.($titre || ' ').'</p>',
+       'listeLiensSuivPrec'=> $liens || ' ',
        'words'       => ' ',
-       'categorie'   => $categorie,
+       'categorie'   => $categorie || 0,
        'id'          => $id,
        'nb'          => 0);
     # Affichage du resultat
@@ -161,18 +167,21 @@ sub GetContentOf
 #------------------------------------------------------------------------------
 # GetCategoriesOf
 #------------------------------------------------------------------------------
-sub GetCategoriesOf
-  {
+sub GetCategoriesOf  {
   my ($self,$id,$idr,$template)=@_;
-  $self->trace(3,"Search::Circa::Search::GetCategoriesOf $id $idr");
+  $self->trace(3,"Search::Circa::Search->GetCategoriesOf $id $idr");
   $idr=1 if !$idr;
   $id=0  if !$id;
   $template = $Circa::Annuaire::Tc if !$template;
   my (@buf,%tab,$titre);
   # On charge toutes les categories
-  my $ref = $self->categorie->loadAll($idr);
+  my $ref = $self->categorie->loadAll($idr);;
   if (ref($ref)) { %tab = %$ref;}
-  else { die "$ref\n";}
+  else {
+    $self->trace(1,"Search::Circa::Search->GetCategoriesOf after".
+		 " loadAll $idr");
+    return undef;
+  }
   foreach my $key (keys %tab)
     {
     my $nom_complet;
@@ -196,8 +205,10 @@ sub GetCategoriesOf
 	  .$self->get_link_categorie($tab{$id}[1], $idr, 0)
 	    ."\">$nom_complet</a>"; 
     }
-  return ($titre,@buf);
-  }
+  unshift(@buf,$titre);
+  $self->trace(3,"Search::Circa::Search->GetCategoriesOf End: $id=> $buf[0]");
+  return @buf;
+}
 
 #------------------------------------------------------------------------------
 # GetSitesOf
@@ -205,7 +216,7 @@ sub GetCategoriesOf
 sub GetSitesOf
   {
   my ($self,$id,$idr,$template,$first)=@_;
-  $self->trace(3,"Search::Circa::Search::GetSitesOf $id $idr");
+  $self->trace(3,"Search::Circa::Search->GetSitesOf $id $idr");
   if (!$idr) {$idr=1;}
   if (!$id) {$id=0;}
   if (!$template) {$template=$Circa::Annuaire::Ts;}
@@ -215,31 +226,32 @@ sub GetSitesOf
   from   ".$self->{PREFIX_TABLE}.$idr."links
   where   categorie=$id and browse_categorie='1' and parse='1'";
   my $sth = $self->{DBH}->prepare($requete);
-  $sth->execute() || print "Erreur $requete:$DBI::errstr\n";
+  if (!$sth->execute()) {
+    $self->trace(1,"Search::Circa::Search-> GetSitesOf ".
+		 "Erreur $requete:$DBI::errstr\n");
+    return undef;
+  }
   my ($facteur,$indiceG)=(100,0);
   while (my ($url,$titre,$description,$langue,$last_update)
-	 = $sth->fetchrow_array)
-    {
-    if ($last_update eq '0000-00-00 00:00:00') {$last_update='?';}
-    if (defined($first))
-      {
-      if ($indiceG>=$first and ($indiceG<($first+$self->{nbResultPerPage}))) 
-	{$buf.= eval $template;}
-      if (!($indiceG%$self->{nbResultPerPage}))
-        {
-        if ($indiceG==$first) 
-	  {$buf_l.=(($indiceG/$self->{nbResultPerPage})+1).' -';}
-	else 
-	  {$buf_l .= '<a class="liens_suivant" href="'
-	     .$self->get_link_categorie($id,$idr,$indiceG).'">'
-	     .(($indiceG/$self->{nbResultPerPage})+1).'</a>-';}
-      }
-    }
-    else {$buf.= eval $template;}
+	 = $sth->fetchrow_array) {
     $indiceG++;
+    if ($last_update eq '0000-00-00 00:00:00') {$last_update='?';}
+    if (defined($first)) {
+      if ($indiceG>$first and ($indiceG<($first+$self->{nbResultPerPage}))){
+	$buf.= eval $template;
+	}
+	if (!(($indiceG-1)%$self->{nbResultPerPage})) {
+	  if (($indiceG-1)==$first) {
+	    $buf_l.=((($indiceG-1)/$self->{nbResultPerPage})+1).' -';}
+	  else {
+	    $buf_l .= '<a class="liens_suivant" href="'
+	      .$self->get_link_categorie($id,$idr,$indiceG-1).'">'
+		.((($indiceG-1)/$self->{nbResultPerPage})+1).'</a>-';}
+	}
+      }
+      else { $buf.= eval $template;}
     }
   if ($indiceG>$self->{nbResultPerPage} and defined($first)) 
-
     {chop($buf_l);$buf_l='<p class="liens_suivant">&lt;'.$buf_l.'&gt;</p>';}
   if (!$buf)
     {$buf="<p>Pas de pages dans cette catégorie</p>";}
@@ -293,7 +305,7 @@ Circa::Annuaire - Create html pages for annuaire
 
 =head1 VERSION
 
-$Revision: 1.5 $
+$Revision: 1.7 $
 
 =head1 Public Class Interface
 

@@ -4,41 +4,19 @@ package Search::Circa::Categorie;
 # Copyright 2000 A.Barbet alian@alianwebserver.com.  All rights reserved.
 
 # $Log: Categorie.pm,v $
+# Revision 1.13  2002/08/17 18:19:02  alian
+# - Minor changes to all code suite to tests
+#
+# Revision 1.12  2002/08/15 23:10:11  alian
+# Minor changes to all code suite to tests. Try to adopt generic return
+# code for all method: undef on error, 0 on no result, ...
+#
 # Revision 1.11  2001/10/28 12:22:37  alian
 # - Ajout de la methode move_categorie
 #
 # Revision 1.10  2001/08/29 16:23:47  alian
 # - Add get_liste_categorie_fils routine
 # - Update POD documentation for new namespace
-#
-# Revision 1.9  2001/08/24 13:37:56  alian
-# - Ajout du prefix Search:: devant chacun des modules
-#
-# Revision 1.8  2001/08/12 23:52:32  alian
-# - Move methods sites_in_categorie and categories_in_categorie in
-# Annuaire.pm
-#
-# Revision 1.7  2001/05/23 00:06:18  alian
-# - Correct a bug in getParent
-#
-# Revision 1.6  2001/05/22 14:13:52  alian
-# - Remove prefix_table call and replace it by $self->{INDEXER}->pre_tbl
-#
-# Revision 1.5  2001/05/21 22:37:43  alian
-# - Add loadAll and getMasque method
-#
-# Revision 1.4  2001/05/20 12:18:20  alian
-# - Change auto method to return a value not an array
-#
-# Revision 1.3  2001/05/14 23:26:52  alian
-# - Correct some call to Circa::Indexer class
-#
-# Revision 1.2  2001/05/14 21:05:50  alian
-# - Update POD documentation
-#
-# Revision 1.1  2001/05/14 14:59:02  alian
-# - Code retiré de Indexer.pm
-#
 #
 
 use strict;
@@ -48,71 +26,77 @@ require Exporter;
 
 @ISA = qw(Exporter);
 @EXPORT = qw();
-$VERSION = ('$Revision: 1.11 $ ' =~ /(\d+\.\d+)/)[0];
+$VERSION = ('$Revision: 1.13 $ ' =~ /(\d+\.\d+)/)[0];
 
 #------------------------------------------------------------------------------
 # new
 #------------------------------------------------------------------------------
-sub new 
-  {
-    my $class = shift;
-    my $self = {};
-    my $indexer = shift;
-    bless $self, $class;
-    $self->{INDEXER} = $indexer;
-    $self->{DBH} = $indexer->{DBH};
-    return $self;
-  }
+sub new   {
+  my $class = shift;
+  my $self = {};
+  my $indexer = shift;
+  bless $self, $class;
+  $self->{INDEXER} = $indexer;
+  $self->{DBH} = $indexer->{DBH};
+  return $self;
+}
 
 #------------------------------------------------------------------------------
 # set_masque
 #------------------------------------------------------------------------------
-sub set_masque
-  {
+sub set_masque  {
   my ($this,$compte,$id,$file)=@_;
-  $this->{DBH}->do("update ".$this->{INDEXER}->pre_tbl.$compte."categorie ".
-		   "set masque='$file' where id = $id");
-  }
+  my $r = $this->{DBH}->do("update ".$this->{INDEXER}->pre_tbl.$compte.
+			   "categorie set masque='$file' where id = $id");
+  return ((!$r or $r eq '0E0') ? 0 : 1);
+}
 
 #------------------------------------------------------------------------------
 # get_masque
 #------------------------------------------------------------------------------
-sub get_masque
-  {
-  my ($this,$compte,$id,$file)=@_;
-  return $this->{INDEXER}->fetch_first
+sub get_masque  {
+  my ($this,$compte,$id)=@_;
+  return 0 if (!$id);
+  my ($m) = $this->{INDEXER}->fetch_first
     ("select masque from ".$this->{INDEXER}->pre_tbl.$compte."categorie ".
-     "where id = $id") if ($id);
+     "where id = $id");
+  return $m;
   }
-  
+
 #------------------------------------------------------------------------------
 # delete
 #------------------------------------------------------------------------------
-sub delete
-  {
+sub delete {
   my ($self,$compte,$id)=@_;
   my $pre = $self->{INDEXER}->pre_tbl.$compte;
   my $sth = $self->{DBH}->prepare("select id from ".$pre."links ".
 				  "where categorie=$id");
-   $sth->execute || print &header,"Erreur:delete_categorie:$DBI::errstr<br>";
-  # Pour chaque categorie
-  while (my @row = $sth->fetchrow_array)
-    {$self->{DBH}->do("delete from ".$pre."relation where id_site = $row[0]");}
-  $sth->finish;
-  $self->{DBH}->do("delete from ".$pre."links where categorie = $id");
-  $self->{DBH}->do("delete from ".$pre."categorie where id = $id");
+  if ($sth->execute) {
+    # Pour chaque categorie
+    while (my @row = $sth->fetchrow_array) {
+     $self->{DBH}->do("delete from ".$pre."relation where id_site = $row[0]");
+   }
+    $sth->finish;
+    $self->{DBH}->do("delete from ".$pre."links where categorie = $id");
+    my $r = $self->{DBH}->do("delete from ".$pre."categorie where id = $id");
+    return ((!$r or $r eq '0E0') ? 0 : 1);
+  } else {
+    $self->{INDEXER}->trace(1,"Erreur:delete_categorie:$DBI::errstr<br>");
+    return undef;
   }
+}
 
 #------------------------------------------------------------------------------
 # rename
 #------------------------------------------------------------------------------
-sub rename
-  {
+sub rename  {
   my ($this,$compte,$id,$nom)=@_;
-  $this->{DBH}->do("update ".$this->{INDEXER}->pre_tbl.$compte."categorie ".
-		   "set nom='$nom' where id = $id") 
-    || print STDERR "Erreur:$DBI::errstr<br>\n";
-  }
+  $nom=~s/'/\\'/g;
+  my $r = $this->{DBH}->do("update ".$this->{INDEXER}->pre_tbl.$compte.
+			   "categorie set nom='$nom' where id = $id")
+    || return undef;
+  return ((!$r or $r eq '0E0') ? 0 : 1);
+}
 
 #------------------------------------------------------------------------------
 # move
@@ -179,33 +163,30 @@ sub get
 #------------------------------------------------------------------------------
 # create
 #------------------------------------------------------------------------------
-sub create
-  {
+sub create  {
   my ($self,$nom,$parent,$responsable)=@_;
   $nom=ucfirst($nom);
   $nom=~s/_/ /g;
+  $nom=~s/'/\\'/g;
   my $id;
-  if ($nom) 
-    {
-      ($id) = $self->{INDEXER}->fetch_first
-	("select id from ".$self->{INDEXER}->pre_tbl.$responsable."categorie ".
-	 "where nom='$nom' and parent=$parent");
-    }
-  if ((!$id) && (defined $parent))
-    {
+  if ($nom) {
+    ($id) = $self->{INDEXER}->fetch_first
+      ("select id from ".$self->{INDEXER}->pre_tbl.$responsable."categorie ".
+       "where nom='$nom' and parent=$parent");
+  }
+  if ((!$id) && (defined $parent)) {
     my $sth = $self->{DBH}->prepare("insert into ".
 				    $self->{INDEXER}->pre_tbl.$responsable.
 				    "categorie(nom,parent) ".
 				    "values('$nom',$parent)");
-    $sth->execute 
-      || print STDERR "Erreur insert into ".
-	$self->{INDEXER}->pre_tbl.$responsable."categorie(nom,parent) ".
-	  "values('$nom',$parent) : $DBI::errstr<br>";
-    $sth->finish;
-    $id = $sth->{'mysql_insertid'};
+    if ($sth->execute) {
+      $sth->finish;
+      $id = $sth->{'mysql_insertid'};
     }
-  return $id || 0;
+    else { return undef; }
   }
+  return $id || 0;
+}
 
 #------------------------------------------------------------------------------
 # auto
@@ -222,24 +203,25 @@ sub auto
 #------------------------------------------------------------------------------
 # loadAll
 #------------------------------------------------------------------------------
-sub loadAll
-  {
+sub loadAll  {
   my ($self,$idr)=@_;
   my %tab;
   my $sth = $self->{DBH}->prepare
     ("select id,nom,parent from ".$self->{INDEXER}->pre_tbl.$idr."categorie");
   #print "requete:$requete\n";
-  $sth->execute() || print "Erreur $DBI::errstr\n";
-  while (my ($id,$nom,$parent)=$sth->fetchrow_array)
-    {
-    $tab{$id}[0]=$nom;
-    $tab{$id}[1]=$parent;
+  if ($sth->execute()) {
+    while (my ($id,$nom,$parent)=$sth->fetchrow_array) {
+      $tab{$id}[0]=$nom;
+      $tab{$id}[1]=$parent;
     }
-  $tab{0}[1] = 0 ;
-  $tab{0}[0] = "Racine du site";
-  return \%tab;
+    $tab{0}[1] = 0 ;
+    $tab{0}[0] = "Racine du site";
+    return \%tab;
+  } else {
+    $self->{INDEXER}->trace(1,"Circa::Categorie->loadAll $DBI::errstr\n");
+    return undef;
   }
-
+}
 
 #------------------------------------------------------------------------------
 # getParent
@@ -307,7 +289,7 @@ This module provide several function to manage categorie of Circa.
 
 =head1 VERSION
 
-$Revision: 1.11 $
+$Revision: 1.13 $
 
 =head1 Public Class Interface
 

@@ -11,7 +11,7 @@ if (!$idr) {$idr=1;}
 include "circaLib.php3";
 $database="circa";
 $prefix="circa_";
-$conn = mysql_pconnect("localhost","alian","spee/do00");
+$conn = mysql_pconnect("localhost","alian","");
 $categories =get_liste_categorie($idr);
 
 if ($url)

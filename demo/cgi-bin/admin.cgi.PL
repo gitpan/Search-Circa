@@ -3,14 +3,14 @@
 # Simple CGI interface to module Search::Circa::Indexer
 # Copyright 2000 A.Barbet alian@alianwebserver.com.  All rights reserved.
 # Take a look in admin.htm
-# $Date: 2001/09/23 10:37:11 $
+# $Date: 2002/08/17 22:28:43 $
 #
 
 use strict;
 use CGI qw/:standard :html3 :netscape escape unescape/;
 use CGI::Carp qw/fatalsToBrowser/;
+use lib '/path/to/circa';
 use CircaConf;
-use lib $CircaConf::CircaDir;
 use Search::Circa::Indexer;
 use Cwd;
 
@@ -91,7 +91,12 @@ my $list = $cgi->scrolling_list(-'name'=>'categorieAuto',
                            -'size'=>1,
                            -'labels'=>\%tab);
 # Liste des variables à substituer dans le template
-my %vars = ('liste_site'=> $indexor->get_liste_site($cgi),'categories'=>$list);
+my %vars = 
+  (
+   'liste_site'=> $indexor->get_liste_site($cgi) 
+   || "You need to create circa table",
+   'categories'=>$list
+  );
 # Affichage du resultat
 print $indexor->fill_template($masque,\%vars),end_html;
 

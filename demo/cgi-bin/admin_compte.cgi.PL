@@ -2,14 +2,14 @@
 #
 # Simple CGI interface to module Search::Circa::Indexer
 # Copyright 2000 A.Barbet alian@alianwebserver.com.  All rights reserved.
-# $Date: 2001/10/28 13:54:04 $
+# $Date: 2002/08/16 09:51:00 $
 #
 
 use strict;
 use CGI qw/:standard :html3 :netscape escape unescape/;
 use CGI::Carp qw/fatalsToBrowser/;
+use lib '/path/to/circa';
 use CircaConf;
-use lib $CircaConf::CircaDir;
 use Search::Circa::Indexer;
 
 
@@ -54,7 +54,7 @@ elsif (param('add_url'))
   $indexor->URL->add($compte,
 			   (url       => param('url'),
 			    valide    => 1,
-			    categorie => param('id')		      
+			    categorie => param('id')
 			   ));
   if (!$DBI::errstr) {print h3("Site ".param('url')." ajouté");}
   else {print h3("Non ajouté : ".$DBI::errstr);}

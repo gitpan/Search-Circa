@@ -10,7 +10,7 @@ require Exporter;
 
 @ISA = qw(Exporter);
 @EXPORT = qw();
-$VERSION = ('$Revision: 1.14 $ ' =~ /(\d+\.\d+)/)[0];
+$VERSION = ('$Revision: 1.17 $ ' =~ /(\d+\.\d+)/)[0];
 
 
 #------------------------------------------------------------------------------
@@ -30,71 +30,86 @@ sub new
 #------------------------------------------------------------------------------
 # add
 #------------------------------------------------------------------------------
-sub add
-  {
-    my ($self,$idMan,%url)=@_;
-    $idMan=1 if (!$idMan);
-    $url{niveau}=0 if (!$url{niveau});
-    chop ($url{url}) if ($url{url}=~/\/$/);
-    my $requete = "insert into ".$self->{INDEXER}->pre_tbl.$idMan."links set ";
-    $requete.= "url           = '$url{url}'"         if ($url{url});
-    $requete.= ",local_url     = '$url{urllocal}'"    if ($url{urllocal});
-    $requete.= ",titre         = '$url{titre}'"       if ($url{titre});
-    $requete.= ",description   = '$url{description}'" if ($url{description});
-    $requete.= ",langue        = '$url{langue}'"      if ($url{langue});
-    $requete.= ",categorie     = $url{categorie}"     if ($url{categorie});
-    $requete.= ",parse         = '$url{parse}'"       if ($url{parse});
-    $requete.= ",valide        = $url{valide}"        if ($url{valide});
-    $requete.= ",niveau        = $url{niveau}"        if ($url{niveau});
-    $requete.= ",last_check    = $url{last_check}"  if ($url{last_check});
-    $requete.= ",last_update   = '$url{last_update}'"  if ($url{last_update});
-    $requete.= ",browse_categorie ='$url{browse_categorie}'" 
+sub add  {
+  my ($self,$idMan,%url)=@_;
+  my $id;
+  $idMan=1 if (!$idMan);
+  $url{niveau}=0 if (!$url{niveau});
+  $url{titre}=~s/([^\\])'/$1\\'/g if ($url{titre});
+  $url{description}=~s/([^\\])'/$1\\'/g if ($url{description});
+  chop ($url{url}) if ($url{url}=~/\/$/);
+  my $requete = "insert into ".$self->{INDEXER}->pre_tbl.$idMan."links set ";
+  $requete.= "url           = '$url{url}'"          if ($url{url});
+  $requete.= ",local_url     = '$url{urllocal}'"    if ($url{urllocal});
+  $requete.= ",titre         = '$url{titre}'"       if ($url{titre});
+  $requete.= ",description   = '$url{description}'" if ($url{description});
+  $requete.= ",langue        = '$url{langue}'"      if ($url{langue});
+  $requete.= ",categorie     = $url{categorie}"     if ($url{categorie});
+  $requete.= ",parse         = '$url{parse}'"       if ($url{parse});
+  $requete.= ",valide        = $url{valide}"        if ($url{valide});
+  $requete.= ",niveau        = $url{niveau}"        if ($url{niveau});
+  $requete.= ",last_check    = $url{last_check}"    if ($url{last_check});
+  $requete.= ",last_update   = '$url{last_update}'" if ($url{last_update});
+  $requete.= ",browse_categorie ='$url{browse_categorie}'"
       if ($url{browse_categorie});
-    #print $requete,"<br>\n";
-    $self->{DBH}->do($requete); 
-    if ($DBI::errstr) 
-	{ $self->{INDEXER}->trace(3, $DBI::errstr."\n"); return 0; }
-    return 1;
+  #print $requete,"<br>\n";
+  $self->{INDEXER}->trace(3, $requete."\n");
+  my $sth = $self->{DBH}->prepare($requete);
+  if ($sth->execute) {
+      $sth->finish;
+      $id = $sth->{'mysql_insertid'};
+    }
+  else {
+    $self->{INDEXER}->trace(1, "Circa::Url->add $requete $DBI::errstr\n");
+    return undef;
   }
+  return $id;
+}
 
 #------------------------------------------------------------------------------
 # update
 #------------------------------------------------------------------------------
-sub update
-  {
+sub update  {
   my ($self,$compte,%url)=@_;
-  $url{'titre'}=~s/'/\\'/g if ($url{'titre'});
-  $url{'description'}=~s/'/\\'/g if ($url{'description'});
+  return undef unless ($url{id});
+  $url{titre}=~s/([^\\])'/$1\\'/g if ($url{titre});
+  $url{description}=~s/([^\\])'/$1\\'/g if ($url{description});
   my $requete =
-    "update ".$self->{INDEXER}->pre_tbl.$compte."links set ";
-  $requete.= "url              = '$url{url}',"         if ($url{url});
-  $requete.= "local_url        = '$url{urllocal}',"    if ($url{urllocal});
-  $requete.= "titre            = '$url{titre}',"       if ($url{titre});
-  $requete.= "description      = '$url{description}'," if ($url{description});
-  $requete.= "langue           = '$url{langue}',"      if ($url{langue});
-  $requete.= "categorie        = $url{categorie},"     if ($url{categorie});
-  $requete.= "parse            = '$url{parse}',"       if ($url{parse});
-  $requete.= "valide           = $url{valide},"        if ($url{valide});
-  $requete.= "niveau           = $url{niveau},"        if ($url{niveau});
-  $requete.= "last_check       = '$url{last_check}',"  
-    if ($url{last_check});
-  $requete.= "last_update      = '$url{last_update}',"  
+    "update ".$self->{INDEXER}->pre_tbl.$compte."links set \n";
+#  $requete.= "\n\turl    = '$url{url}',"         if ($url{url});
+  $requete.= "\n\tlocal_url  = '$url{urllocal}',"    if ($url{urllocal});
+  $requete.= "\n\ttitre     = '$url{titre}',"       if ($url{titre});
+  $requete.= "\n\tdescription ='$url{description}'," 
+    if ($url{description});
+  $requete.= "\n\tlangue   = '$url{langue}',"      if ($url{langue});
+  $requete.= "\n\tcategorie  = $url{categorie},"     if ($url{categorie});
+  $requete.= "\n\tparse    = '$url{parse}',"       if ($url{parse});
+  $requete.= "\n\tvalide     = $url{valide},"        if ($url{valide});
+  $requete.= "\n\tniveau     = $url{niveau},"        if ($url{niveau});
+  if ($url{last_check})
+    {
+	if ($url{last_check} eq 'NOW()')
+	  {$requete.= "\n\tlast_check  = NOW(),";}
+	else { $requete.= "\n\tlast_check  = '$url{last_check}',"; }
+    }
+  $requete.= "\n\tlast_update      = '$url{last_update}',"  
     if ($url{last_update});
-  $requete.= "browse_categorie ='$url{browse_categorie}'," 
+  $requete.= "\n\tbrowse_categorie ='$url{browse_categorie}'," 
     if ($url{browse_categorie});
   if ($requete=~/,$/) { chop($requete); }
   $requete.="  where id=$url{id}"; 
-  #print $requete;
-  $self->{DBH}->do($requete);
-  if ($DBI::errstr) { print $DBI::errstr,"\n"; return 0; }
-  return 1;
+#  print $requete;
+
+  $self->{INDEXER}->trace(3, $requete."\n");
+  my $r = $self->{DBH}->do($requete) || return undef;
+#  print "$requete $DBI::errstr\n" if (!$r or $r eq '0E0');
+  return ((!$r or $r eq '0E0') ? 0 : 1);
 }
 
 #------------------------------------------------------------------------------
 # load
 #------------------------------------------------------------------------------
-sub load
-  {
+sub load  {
   my ($self,$compte,$id)=@_;
   my @l = $self->{INDEXER}->fetch_first
     ("select url,local_url,titre,description,
@@ -102,6 +117,7 @@ sub load
              last_check,last_update,browse_categorie
     from ".$self->{INDEXER}->pre_tbl.$compte."links
     where id=".$id);
+  return 0 if (!@l);
   my %tab=
     ( url              => $l[0],
       local_url        => $l[1],
@@ -117,40 +133,42 @@ sub load
       browse_categorie => $l[11],
       );
   return \%tab;
-  }
+}
 
 #------------------------------------------------------------------------------
 # delete
 #------------------------------------------------------------------------------
-sub delete
-  {
-    my ($this,$compte,$id_url)=@_;
-    $this->{DBH}->do
-      ("delete from ".$this->{INDEXER}->pre_tbl.$compte."relation".
-               "where id_site = $id_url");
-    $this->{DBH}->do("delete from ".$this->{INDEXER}->pre_tbl.$compte."links ".
-		     "where id = $id_url");
+sub delete  {
+  my ($this,$compte,$id_url)=@_;
+  $this->{DBH}->do
+    ("delete from ".$this->{INDEXER}->pre_tbl.$compte."relation".
+     "where id_site = $id_url");
+  my $r = $this->{DBH}->do("delete from ".$this->{INDEXER}->pre_tbl.$compte.
+			   "links where id = $id_url") || return 0;
+  return ((!$r or $r eq '0E0') ? 0 : 1);
   }
 
 #------------------------------------------------------------------------------
 # delete_all_non_valid
 #------------------------------------------------------------------------------
-sub delete_all_non_valid
-  {
-    my ($self,$id)=@_;
-    my $tab = $self->a_valider($id);
-    foreach (keys %$tab) {$self->delete($id,$_);}
-  }
+sub delete_all_non_valid  {
+  my ($self,$id)=@_;
+  my $tt = 0;
+  my $tab = $self->a_valider($id) || return undef;
+  foreach (keys %$tab) {$tt += $self->delete($id,$_);}
+  return $tt;
+}
 
 #------------------------------------------------------------------------------
 # valid_all_non_valid
 #------------------------------------------------------------------------------
-sub valid_all_non_valid
-  {
-    my ($self,$id)=@_;
-    my $tab = $self->a_valider($id);
-    foreach (keys %$tab) {$self->valide($id,$_);}
-  }
+sub valid_all_non_valid  {
+  my ($self,$id)=@_;
+  my $tt = 0;
+  my $tab = $self->a_valider($id) || return undef;
+  foreach (keys %$tab) {$tt+= $self->valide($id,$_);}
+  return $tt;
+}
 
 #------------------------------------------------------------------------------
 # need_parser
@@ -243,7 +261,7 @@ sub a_valider
     my $sth = $self->{DBH}->prepare("select id,url from ".
 				    $self->{INDEXER}->pre_tbl.$id."links ".
 				    "where valide=0");
-    $sth->execute() || print &header,$DBI::errstr,"<br>\n";
+    $sth->execute() || return undef;
     while (my @row=$sth->fetchrow_array)
       {
 	$self->{INDEXER}->set_host_indexed($row[1]);
@@ -258,21 +276,23 @@ sub a_valider
 #------------------------------------------------------------------------------
 # valide
 #------------------------------------------------------------------------------
-sub valide
-  {
+sub valide  {
   my ($this,$compte,$id_url)=@_;
-  $this->{DBH}->do("update ".$this->{INDEXER}->pre_tbl.$compte."links ".
-		   "set valide=1,parse='0' where id = $id_url");
+  my $r=$this->{DBH}->do("update ".$this->{INDEXER}->pre_tbl.$compte."links ".
+			 "set valide=1,parse='0' where id = $id_url") 
+    || return 0;
+  return ((!$r or $r eq '0E0') ? 0 : 1);
   }
 
 #------------------------------------------------------------------------------
 # non_valide
 #------------------------------------------------------------------------------
-sub non_valide
-  {
+sub non_valide  {
   my ($this,$compte,$id_url)=@_;
-  $this->{DBH}->do("update ".$this->{INDEXER}->pre_tbl.$compte."links".
-		   " set valide='0' where id=".$id_url);
+  my $r=$this->{DBH}->do("update ".$this->{INDEXER}->pre_tbl.$compte."links".
+			 " set valide='0' where id=".$id_url) 
+    || return 0;
+  return ((!$r or $r eq '0E0') ? 0 : 1);
   }
 
 #------------------------------------------------------------------------------
@@ -285,7 +305,7 @@ Search::Circa::Url - provide functions to manage url of Circa
 
 =head1 VERSION
 
-$Revision: 1.14 $
+$Revision: 1.17 $
 
 =head1 SYNOPSIS
 
@@ -375,22 +395,27 @@ Create a new Circa::Url object with indexer instance properties
 
 =item add($idMan,%url)
 
-Add url %url for account $idMan. If error return 0 (you can ask $DBI::errstr 
-to know why) or 1 if ok.
+Add url %url for account $idMan.
+If error (account undefined, no account, no url) return 0. You can ask
+$DBI::errstr to know why) or 1 if ok.
 
 =item load($compte,$id)
 
-Return reference to hash %url for id $id, account $compte
+Return reference to hash %url for id $id, account $compte.
+If error (id undefined, no id, no account) return 0. You can ask 
+$DBI::errstr to know why) or 1 if ok.
 
 =item update($compte,%url)
 
-Update url %url for account $compte
+Update url %url for account $compte.
+If error (id undefined, no id, no account) return 0. You can ask
+$DBI::errstr to know why) or 1 if ok. Field url can't be updated.
 
 =item delete($compte,$id_url)
 
-Delete url with id $id_url on account $compte
-
-Supprime le lien $id_url de la table $compte/relation et $compte/links
+Delete url with id $id_url on account $compte (clean table links/releation)
+If error (id undefined, no id, no account) return 0. You can ask
+$DBI::errstr to know why)
 
 =item delete_all_non_valid($id)
 

@@ -7,14 +7,20 @@ Circa::Search is 1.5
 So I use some common code in Circa.pm, split other code in Url.pm, 
 Categorie.pm and Parser.pm
 
+Release 1.14 2002/08/19 10:19:34
+	- Lot of changes !!!!
+	- New installation procedure
+	- New test suite
+	- Update lot of code for error checking
+
 Release 1.11 2001/10/28 14:14:25 2001 alian
 	- Add faq in Circa pod documentation
 	- New parameter in CircaConf: hash %conf used by all scripts
 	- Add Annuaire package and annuaire.pl script to manage directory
 	- Search: Remove warning when print root categorie
 	- Indexer : 
-		- Add method move_categorie in Categorie to move categorie from one
-		to another
+ 		- Add method move_categorie in Categorie to move categorie 
+		from one to another
 		- Correct bug with url indexing with file://
 		- New interface for admin.pl
 

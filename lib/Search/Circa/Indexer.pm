@@ -4,6 +4,16 @@ package Search::Circa::Indexer;
 # Copyright 2000 A.Barbet alian@alianwebserver.com.  All rights reserved.
 
 # $Log: Indexer.pm,v $
+# Revision 1.31  2002/08/19 11:47:05  alian
+# -Change guess of mysql bin path
+#
+# Revision 1.30  2002/08/15 23:10:11  alian
+# Minor changes to all code suite to tests. Try to adopt generic return
+# code for all method: undef on error, 0 on no result, ...
+#
+# Revision 1.29  2002/03/18 21:56:02  alian
+# - Ensemble de correction de bug mineurs
+#
 # Revision 1.28  2001/10/28 15:51:11  alian
 # - Add exportId (one account) feature
 #
@@ -30,7 +40,7 @@ require Exporter;
 
 @ISA = qw(Exporter Search::Circa);
 @EXPORT = qw();
-$VERSION = ('$Revision: 1.28 $ ' =~ /(\d+\.\d+)/)[0];
+$VERSION = ('$Revision: 1.31 $ ' =~ /(\d+\.\d+)/)[0];
 
 ########## CONFIG  ##########
 my %ConfigMoteurDefault=(
@@ -45,6 +55,12 @@ my %ConfigMoteurDefault=(
   'niveau_max'    => 7,  # Niveau max à indexer
   'indexCgi'    => 0,  # Suit les différents liens des CGI (ex: ?nom=toto&riri=eieiei)
   );
+
+# Path of mysql binary
+my @path_mysql = qw!/usr/bin /usr/local/bin /opt/bin /opt/local/bin 
+                    /usr/pkg/bin /usr/local/mysql/bin /opt/mysql/bin!;
+push(@path_mysql, split(/:/,$ENV{PATH})) if ($ENV{PATH});
+
 ########## FIN CONFIG  ##########
 
 #------------------------------------------------------------------------------
@@ -134,17 +150,16 @@ sub addSite
   {
     my ($self,$url,$email,$titre,$categorieAuto,$cgi,$rep,$file)=@_;
     #print "$url,$email,$titre,$categorieAuto,$cgi,$rep,$file\n";
-    if ($cgi)
-      {
-	$file=$cgi->param('file');
-	my $tmpfile=$cgi->tmpFileName($file); # chemin du fichier temp
-	if ($file=~/.*\\(.*)$/) {$file=$1;}
-	my $fileC=$file;
-	$file = $rep.$file;
-	use File::Copy;
-	copy($tmpfile,$file) 
-	  || die "Impossible de creer $file avec $tmpfile:$!\n<br>";
-      }
+    if ($cgi && $cgi->param('file')) {
+      $file=$cgi->param('file');
+      my $tmpfile=$cgi->tmpFileName($file); # chemin du fichier temp
+      if ($file=~/.*\\(.*)$/) {$file=$1;}
+      my $fileC=$file;
+      $file = $rep.$file;
+      use File::Copy;
+      copy($tmpfile,$file) 
+	|| die "Impossible de creer $file avec $tmpfile:$!\n<br>";
+    }
     if (!$email) {$email='Inconnu';}
     if (!$titre) {$titre='Non fourni';}
     if (!$file) {$file=' ';}
@@ -256,6 +271,7 @@ sub update
 sub create_table_circa
   {
   my $self = shift;
+  my $r = 1;
   my $requete="
 CREATE TABLE ".$self->pre_tbl."responsable (
    id     int(11) DEFAULT '0' NOT NULL auto_increment,
@@ -266,7 +282,7 @@ CREATE TABLE ".$self->pre_tbl."responsable (
    PRIMARY KEY (id)
 )";
 
-  $self->{DBH}->do($requete) || print $DBI::errstr,"<br>\n";
+  $self->{DBH}->do($requete) || ($r = 0 && print $DBI::errstr,"<br>\n");
   $requete="
 CREATE TABLE ".$self->pre_tbl."inscription (
    email  char(25) NOT NULL,
@@ -274,7 +290,7 @@ CREATE TABLE ".$self->pre_tbl."inscription (
    titre  char(50) NOT NULL,
    dateins  date
 )";
-  $self->{DBH}->do($requete) || print $DBI::errstr,"<br>\n";
+  $self->{DBH}->do($requete) || ($r = 0 && print $DBI::errstr,"<br>\n");
 
   $requete="
 CREATE TABLE ".$self->pre_tbl."local_url (
@@ -282,27 +298,30 @@ CREATE TABLE ".$self->pre_tbl."local_url (
    path  varchar(255) NOT NULL,
    url  varchar(255) NOT NULL
 )";
-  $self->{DBH}->do($requete) || print $DBI::errstr,"<br>\n";
-  }
+  $self->{DBH}->do($requete) || ($r = 0 && print $DBI::errstr,"<br>\n");
+  return $r;
+}
 
 #------------------------------------------------------------------------------
 # drop_table_circa
 #------------------------------------------------------------------------------
-sub drop_table_circa
-  {
+sub drop_table_circa {
   my $self = shift;
   my $sth = $self->{DBH}->prepare
     ("select id from ".$self->pre_tbl."responsable");
-  $sth->execute() || print $self->header,$DBI::errstr,"<br>\n";
-  while (my @row=$sth->fetchrow_array) {$self->drop_table_circa_id($row[0]);}
-  $sth->finish;
-  $self->{DBH}->do("drop table ".$self->pre_tbl."responsable")
-    || print $DBI::errstr,"<br>\n";
-  $self->{DBH}->do("drop table ".$self->pre_tbl."inscription") 
-    || print $DBI::errstr,"<br>\n";
-  $self->{DBH}->do("drop table ".$self->pre_tbl."local_url")  
-    || print $DBI::errstr,"<br>\n";
-  }
+  if ($sth->execute()) {
+    while (my @row=$sth->fetchrow_array) {
+      $self->drop_table_circa_id($row[0]) if ($row[0]);
+    }
+    $sth->finish;
+    $self->{DBH}->do("drop table ".$self->pre_tbl."responsable")
+      || print $DBI::errstr,"<br>\n";
+    $self->{DBH}->do("drop table ".$self->pre_tbl."inscription")
+      || print $DBI::errstr,"<br>\n";
+    $self->{DBH}->do("drop table ".$self->pre_tbl."local_url")
+      || print $DBI::errstr,"<br>\n";
+  } else { $self->trace(1,"drop_table_circa $DBI::errstr\n"); }
+}
 
 #------------------------------------------------------------------------------
 # drop_table_circa_id
@@ -311,16 +330,18 @@ sub drop_table_circa_id
   {
   my $self = shift;
   my $id=$_[0];
-  $self->{DBH}->do("drop table ".$self->pre_tbl.$id."categorie")  
-    || print $DBI::errstr,"<br>\n";
-  $self->{DBH}->do("drop table ".$self->pre_tbl.$id."links")      
-    || print $DBI::errstr,"<br>\n";
-  $self->{DBH}->do("drop table ".$self->pre_tbl.$id."relation")   
-    || print $DBI::errstr,"<br>\n";
-  $self->{DBH}->do("drop table ".$self->pre_tbl.$id."stats")      
-    || print $DBI::errstr,"<br>\n";
+  $self->{DBH}->do("drop table ".$self->pre_tbl.$id."categorie")
+    || return 0;
+  $self->{DBH}->do("drop table ".$self->pre_tbl.$id."links")
+    || return 0;
+  $self->{DBH}->do("drop table ".$self->pre_tbl.$id."relation")
+    || return 0;
+  $self->{DBH}->do("drop table ".$self->pre_tbl.$id."stats")
+    || return 0;
   $self->{DBH}->do
-    ("delete from ".$self->pre_tbl."responsable where id=$id");
+    ("delete from ".$self->pre_tbl."responsable where id=$id")
+    || return 0;
+  return 1;
   }
 
 #------------------------------------------------------------------------------
@@ -386,53 +407,66 @@ CREATE TABLE ".$self->pre_tbl.$id."stats (
 #------------------------------------------------------------------------------
 # export
 #------------------------------------------------------------------------------
-sub export
-  {
+sub export  {
   my ($self,$dump,$path,$id)=@_;
   my ($pass, $file, $host, $user);
-  if (!$path) {use Cwd;$path=cwd;}
+  if (!$path) { $path=$CircaConf::export; }
+  if (!$path) { $path="/tmp"; }
   $file=$path."/circa";
   $file.=$id unless !$id;
   $file.=".sql";
   $file=~s/\/\//\//g;
+
   if ( (! -w $path) || ( ( -e $file) && (!-w $file)))  
     {$self->close; die "Can't create $file (not enough rights ?):$!\n";}
-  if ( (!$dump) || (! -x $dump))
-    {
-    if (-x "/usr/bin/mysqldump") {$dump = "/usr/bin/mysqldump" ;}
-    elsif (-x "/usr/local/bin/mysqldump"){$dump = "/usr/local/bin/mysqldump";}
-    elsif (-x "/opt/bin/mysqldump") {$dump = "/opt/bin/mysqldump" ;}
-    else {$self->close; die "Can't find mysqldump.\n";}
+  if ( (!$dump) || (! -x $dump)) {
+    foreach (@path_mysql) {
+      if (-x $_."/mysqldump") {$dump = "$_/mysqldump" ; last; }
     }
-  if ((-e $file) && (!(unlink $file))) 
+  }
+  if ( (!$dump) || (! -x $dump)) {
+    $self->close; die "Can't find mysqldump.\n";
+  }
+  if ((-e $file) && (!(unlink $file)))
 	{ $self->close; die "Can't unlink $file:$!\n";}
 
   my (@t,@exec);
-  my $requete = "select id from ".$self->pre_tbl."responsable";
-  $requete.= " where id = $id" unless (!$id);
-  my $sth = $self->{DBH}->prepare($requete);
-  $sth->execute;
-  while (my ($id)=$sth->fetchrow_array) {push(@t,$id);}
-  $sth->finish;
+
+  if (!$id) {
+    my $requete = "select id from ".$self->pre_tbl."responsable";
+    $requete.= " where id = $id" unless (!$id);
+    my $sth = $self->{DBH}->prepare($requete);
+    $sth->execute;
+    while (my ($id)=$sth->fetchrow_array) {push(@t,$id);}
+    $sth->finish;
+  }
+  else { push(@t,$id); }
+
   if ($self->{_PASSWORD}) {$pass=" -p".$self->{_PASSWORD}.' ';}
   else {$pass=' ';}
+
   if ($self->{_HOST}) {$host=" -h".$self->{_HOST}.' ';}
   else {$host=' ';}
-  my $option = " --add-drop-table -u".$self->{_USER}.
+  my $option = " -u".$self->{_USER}.
     $pass.$host.$self->{_DB}." ".$self->pre_tbl;
-
   if (!$id)
     {
+	$option=" --add-drop-table ".$option;
 	push(@exec,$dump.$option."responsable >> $file");
 	push(@exec,$dump.$option."local_url   >> $file");
 	push(@exec,$dump.$option."inscription >> $file");
     }
+  else { $option=" --no-create-info ".$option; }
 
   foreach my $id (@t)
     {
 	my $opt = $option.$id;
+	my $p = $self->pre_tbl.$id;
+	push(@exec,"echo 'DELETE FROM ".$p."categorie;'>> $file");
 	push(@exec,$dump.$opt."categorie  >> $file");
+	push(@exec,"echo 'DELETE FROM ".$p."links;'>> $file");
 	push(@exec,$dump.$opt."links      >> $file");
+	push(@exec,"echo 'DELETE FROM ".$p."relation;'>> $file");
 	push(@exec,$dump.$opt."relation   >> $file");
     }
   $|=1;
@@ -454,16 +488,18 @@ sub import_data
   {
   my ($self,$dump,$path)=@_;
   my ($pass,$file);
-  if (!$path) {use Cwd;$path=cwd;}
+  if (!$path) { $path=$CircaConf::export; }
+  if (!$path) { $path="/tmp"; }
   $file=$path."/circa.sql";$file=~s/\/\//\//g;
   if (! -r $file) {$self->close; die "Can't find $file:$!\n";}
-  if ( (!$dump) || (! -x $dump))
-    {
-    if (-x "/usr/bin/mysql") {$dump = "/usr/bin/mysql" ;}
-    elsif (-x "/usr/local/bin/mysql") {$dump = "/usr/local/bin/mysql" ;}
-    elsif (-x "/opt/bin/mysql") {$dump = "/opt/bin/mysql" ;}
-    else {$self->disconnect; die "Can't find mysql.\n";}
+  if ( (!$dump) || (! -x $dump)) {
+    foreach (@path_mysql) {
+      if (-x $_."/mysql") {$dump = "$_/mysql" ; last; }
     }
+  }
+  if ( (!$dump) || (! -x $dump)) {
+    $self->close; die "Can't find mysql.\n";
+  }
   $|=1;
   print "En cours d'import ...";
   my $c = $dump." -u".$self->{_USER};
@@ -633,20 +669,25 @@ sub get_liste_liens_a_valider
 #------------------------------------------------------------------------------
 # get_liste_site
 #------------------------------------------------------------------------------
-sub get_liste_site
-  {
+sub get_liste_site  {
   my ($self,$cgi)=@_;
   my %tab;
-  my $sth = $self->{DBH}->prepare("select id,email,titre from ".$self->pre_tbl."responsable");
-  $sth->execute() || print $self->header,$DBI::errstr,"<br>\n";
-  while (my @row=$sth->fetchrow_array) {$tab{$row[0]}="$row[1]/$row[2]";}
-  $sth->finish;
-  my @l =sort { $tab{$a} cmp $tab{$b} } keys %tab;
-  return $cgi->scrolling_list(  -'name'=>'id',
-                             -'values'=>\@l,
-                             -'size'=>1,
-                             -'labels'=>\%tab);
-        }
+  my $sth = $self->{DBH}->prepare("select id,email,titre from ".
+				  $self->pre_tbl."responsable");
+  if ($sth->execute()) {
+    while (my @row=$sth->fetchrow_array) {$tab{$row[0]}="$row[1]/$row[2]";}
+    $sth->finish;
+    my @l =sort { $tab{$a} cmp $tab{$b} } keys %tab;
+    return $cgi->scrolling_list(  -'name'=>'id',
+				  -'values'=>\@l,
+				  -'size'=>1,
+				  -'labels'=>\%tab);
+  }
+  else {
+    $self->trace(1,"Circa::Indexer->get_liste_site $DBI::errstr\n");
+    return undef;
+  }
+}
 
 #------------------------------------------------------------------------------
 # get_liste_mot
@@ -933,7 +974,7 @@ grow to one. So if < to $Config{'niveau_max'}, url is added.
 
 =head1 VERSION
 
-$Revision: 1.28 $
+$Revision: 1.31 $
 
 =head1 Class Interface
 

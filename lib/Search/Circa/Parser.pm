@@ -4,6 +4,19 @@ package Search::Circa::Parser;
 # Copyright 2000 A.Barbet alian@alianwebserver.com.  All rights reserved.
 
 # $Log: Parser.pm,v $
+# Revision 1.19  2002/08/19 10:16:11  alian
+# Update display of url indexed
+#
+# Revision 1.18  2002/08/17 18:19:02  alian
+# - Minor changes to all code suite to tests
+#
+# Revision 1.17  2002/08/15 23:10:12  alian
+# Minor changes to all code suite to tests. Try to adopt generic return
+# code for all method: undef on error, 0 on no result, ...
+#
+# Revision 1.16  2002/03/18 21:56:02  alian
+# - Ensemble de correction de bug mineurs
+#
 # Revision 1.15  2001/10/28 12:22:09  alian
 # - Colonne browse_categorie mise à jour en fonction de auto_categorie
 #
@@ -41,7 +54,7 @@ require Exporter;
 
 @ISA = qw(Exporter);
 @EXPORT = qw();
-$VERSION = ('$Revision: 1.15 $ ' =~ /(\d+\.\d+)/)[0];
+$VERSION = ('$Revision: 1.19 $ ' =~ /(\d+\.\d+)/)[0];
 
 # Mot à ne pas indexer
 my %bad = map {$_ => 1} qw (
@@ -61,7 +74,7 @@ sub new
     my $class = shift;
     my $self = {};
     my $indexer = shift;
-    $indexer->trace(5, "$Search::Circa::Parser::new\n");
+    $indexer->trace(5, "Search::Circa::Parser::new\n");
     bless $self, $class;
     $self->{DBH} = $indexer->{DBH};
     $self->{ConfigMoteur} = $indexer->{ConfigMoteur};
@@ -130,7 +143,10 @@ sub text
 #------------------------------------------------------------------------------
 sub look_at
   {
-  my($this,$url,$idc,$idr,$lastModif,$url_local,$categorieAuto,$niveau,$categorie) = @_;
+  my($this,$url,$idc,$idr,$lastModif,$url_local,$categorieAuto,
+     $niveau,$categorie) = @_;
+  $niveau = 0 if (!$niveau);
+  $categorie = 0 if (!$categorie);
   my $buf_debug = "\tUrl => $url\n\tIdc => $idc\n";
   $buf_debug.= "\tLast update => $lastModif" unless (!defined($lastModif));
   $buf_debug.= "\tUrl local => $url_local" unless (!defined($url_local));
@@ -155,7 +171,7 @@ sub look_at
 	$this->{INDEXER}->fetch_first("select path,url from ".
 			 $this->{INDEXER}->pre_tbl."local_url where id=$idr");
     }
-  print "Analyse de $url<br>\n";
+  print "Fetch $url", ($ENV{SERVER_NAME} ? "<br>\n" : "\n");
   
   my ($nb,$nbwg,$nburl)=(0,0,0);
   if ($url_local) {$this->{INDEXER}->set_host_indexed($url_local);}
@@ -176,7 +192,7 @@ sub look_at
 	  print "No update on $url<br>\n" if ($this->{DEBUG});
 	  $this->{INDEXER}->URL->update
 	    ($idr,('id'=>$idc, 
-		   'last_check'=>"CURRENT_TIMESTAMP"));
+		   'last_check'=>"NOW()"));
 	  return (0,0,0);
 	}
       if ($res->last_modified)
@@ -216,9 +232,9 @@ sub look_at
 
       # Mots clefs et description
       my ($desc,$keyword)=($DESCRIPTION||' ',$KEYWORDS||' ');
-      undef $DESCRIPTION; undef $KEYWORDS; 
+     undef $DESCRIPTION; undef $KEYWORDS; 
       my $titre = $res->title || $url;# Titre
-      foreach ($titre,$desc,$keyword){ s/0x39/\\0x39/g if ($_); }	  
+#      foreach ($titre,$desc,$keyword){ s/0x39/\\0x39/g if ($_); }	  
       # Categorie
       if ($categorieAuto) 
 	  {$categorie = $this->{INDEXER}->categorie->get($url,$idr);}
@@ -283,35 +299,37 @@ sub look_at
 	      $urlb=~s/$racineFile/$racineUrl/g;
 	      #print h1("Ajout site local:$$var[2] pour $racineFile");
 	      $this->{INDEXER}->trace(2, "\t".$urlb);
-	      if ($this->{INDEXER}->URL->add($idr,
-							 (url       => $urlb, 
-							  urllocal  => $var,
-							  niveau    => $niveau+1,
-							  categorie => $categorie,
-							  valide    => 1,
-							  browse_categorie=>$categorieAuto)))
+	      if ($this->{INDEXER}->URL->add
+		  ($idr,
+		   (url       => $urlb, 
+		    urllocal  => $var,
+		    niveau    => $niveau+1,
+		    categorie => $categorie,
+		    valide    => 1,
+		    browse_categorie=>$categorieAuto)))
 		  { $nburl++; }
 		else {$this->{INDEXER}->trace
-			  (2,"\tCan't add $urlb:\n\t$DBI::errstr");}
+			(2,"\tCan't add $urlb:\n\t$DBI::errstr");}
 	    }
-	  elsif ($var) 
-	    {
-	      $this->{INDEXER}->trace(2, "\t".$var);
-	      if ($this->{INDEXER}->URL->add($idr,(url       => $var,
-								 niveau    => $niveau+1,
-								 categorie => $categorie,
-								 valide => 1)))
-		  { $nburl++; }
-		else 
-		  { $this->{INDEXER}->trace(2, 
-						    "\tCan't add $var:\n\t$DBI::errstr");}
-	    }
+	  elsif ($var) {
+	    $this->{INDEXER}->trace(2, "\t".$var);
+	    if ($this->{INDEXER}->URL->add
+		($idr,
+		 (url       => $var,
+		  niveau    => $niveau+1,
+		  categorie => $categorie,
+		  valide => 1)))
+	      { $nburl++; }
+	    else 
+	      { $this->{INDEXER}->trace
+		  (2,"\tCan't add $var:\n\t$DBI::errstr");}
+	  }
         }
 	$this->{INDEXER}->trace(3, "---------------------------------\n");
       return ($nburl,$nbw,$nbwg);
     }
   # Sinon previent que URL defectueuse
-  else {print "Url non valide:$url\n";return (-1,0,0);}
+  else { print "*** ", $res->code," : $url\n";return (-1,0,0);}
 }
 
 #------------------------------------------------------------------------------
@@ -325,8 +343,9 @@ sub set_agent
   $self->{_ROBOT}=$locale;
   if (($self->{ConfigMoteur}->{'temporate'}) && (!$locale))
     {
-      $self->{AGENT} = new LWP::RobotUA('CircaIndexer / $Revision: 1.15 $', 
-                                       $self->{ConfigMoteur}->{'author'});
+      $self->{AGENT} = new LWP::RobotUA
+	  ('CircaParser / $Revision: 1.19 $',
+	   $self->{ConfigMoteur}->{'author'});
       $self->{AGENT}->delay(1/120.0);
     }
   else {$self->{AGENT} = new LWP::UserAgent; }
@@ -366,8 +385,9 @@ sub check_links
   {
     my($self,$tag,$links) = @_;
     my $host = $self->{INDEXER}->host_indexed;
-    my $bad = qr/\.(doc|zip|ps|gif|jpg|gz|pdf|eps|png|deb|xls|ppt|
-		    class|GIF|css|js|wav|mid)$/i;
+    my $li = "doc|zip|ps|gif|jpg|gz|pdf|eps|png|deb|xls|ppt|".
+	     "class|GIF|css|js|wav|mid";
+    my $bad = qr/\.($li)$/i;
     if (($tag) && ($links) && ($tag eq 'a') 
 	&& ($links=~/\Q$host\E/) 
 	&& ($links !~ $bad))
@@ -402,7 +422,7 @@ for index each document. Main method is C<look_at>.
 
 =head1 VERSION
 
-$Revision: 1.15 $
+$Revision: 1.19 $
 
 =head1 Public Class Interface
 
@@ -411,14 +431,6 @@ $Revision: 1.15 $
 =item new($indexer_instance)
 
 Create a new Circa::Parser object with indexer instance properties
-
-=item tag
-
-Method call for each HTML tag find in HTML pages.
-
-=item text
-
-Method call for each content of tag in HTML pages
 
 =item look_at ($url,$idc,$idr,$lastModif,$url_local,
                $categorieAuto,$niveau,$categorie)
@@ -519,6 +531,14 @@ $facteur : facteur à attribuer à chacun des mots trouvés
 =back
 
 Retourne la référence vers le hash
+
+=item tag
+
+Method call for each HTML tag find in HTML pages.
+
+=item text
+
+Method call for each content of tag in HTML pages
 
 =item check_links($tag,$links)
 
