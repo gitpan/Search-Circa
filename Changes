@@ -1,11 +1,32 @@
 Revision history for Perl extension Circa.
 
-Circa is a merge between Circa::Indexer and Circa::Search.
-Before this release, last release of Circa::Indexer is 1.8 and 
-Circa::Search is 1.5
+Release 1.18 2003/01/02 12:10:25
+	Working file: demo/circa_admin.PL
+	revision 1.6 - Add check for --id parameter when needed
+	             - Update SYNOPSIS pod part
 
-So I use some common code in Circa.pm, split other code in Url.pm, 
-Categorie.pm and Parser.pm
+	Working file: lib/Search/Circa.pm
+	revision 1.18 - Small update to trace method for cluck only 
+	                on level 5 and upper
+
+	Working file: lib/Search/Circa/Indexer.pm
+	revision 1.39 - Rewrite set_host_indexed method, update POD doc
+	revision 1.38 - Update call of look_at to use hash in place of list
+	revision 1.37 - Some minor fixe suite to last update
+
+	Working file: lib/Search/Circa/Parser.pm
+	revision 1.27 - Add url found with meta http-equiv refresh
+	revision 1.26 - Use hash in place of list in look_at
+	              - Call analyse in each text call in place of global 
+                        var TEXT
+	              - Update POD doc
+	revision 1.25 - Some minor fixe suite to last update
+
+	Working file: lib/Search/Circa/Url.pm
+	revision 1.19 - Small update to trace SQL request on level 4, not 3
+
+	Working file: t/15CircaParser.t
+	revision 1.5 - Fix for new interface of look_at
 
 Release 1.17 2002/12/29 13:55:16
 	Working file: demo/circa_admin.PL
@@ -89,3 +110,10 @@ Release 1.6  2001/08/05 20:36:10  alian
 
 Release 1.5  2001/06/02 08:18:26  alian
 	- First release of Circa as one package
+
+Circa is a merge between Circa::Indexer and Circa::Search.
+Before this release, last release of Circa::Indexer is 1.8 and 
+Circa::Search is 1.5
+
+So I use some common code in Circa.pm, split other code in Url.pm, 
+Categorie.pm and Parser.pm

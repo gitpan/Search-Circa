@@ -56,7 +56,7 @@ if ($tes =~ m/^y(es)?$/i) {
 my $root_access = prompt("7/ Did you have write access to install perl ".
 			 "modules on standard directory ? \n".
 			 "(else I need put use lib 'something' in [.pl|.cgi]".
-			 " files)", "no");
+			 " files)", "yes");
 my $path;
 if ($root_access !~ m/^y(es)?$/i) {
   $path = prompt("7b/ Where did you plan to install Circa ?", 

@@ -2,8 +2,8 @@
 #
 # Simple perl example to interface with module Search::Circa::Indexer
 # Copyright 200x A.Barbet alian@alianwebserver.com.  All rights reserved.
-# $Date: 2002/12/29 03:18:36 $
-# $Revision: 1.5 $
+# $Date: 2003/01/02 12:13:30 $
+# $Revision: 1.6 $
 #
 
 use strict;
@@ -16,19 +16,27 @@ use Pod::Usage;
 $|=1;
 my $indexor = new Search::Circa::Indexer(%CircaConf::conf);
 my %opts;
-my @options = qw/create drop update=i parse_new depth=i man config title=s
+my @need_id = qw/parse_new stats drop_id exportId clean/;
+my @options = qw/create drop update=i depth=i man config title=s
                  add_account site add url=s add_account_prompt help proxy=s
-  id=i orig=s dest=s stats export exportId import drop_id minW=i
-                 debug=i clean email=s/;
+                  id=i orig=s dest=s export import minW=i debug=i email=s/;
+@options = (@need_id, @options);
 
-GetOptions(\%opts,@options) or pod2usage( -verbose => 1, -exitval => 1 );
+GetOptions(\%opts,@options) or pod2usage( -verbose => 0, -exitval => 1 );
 $opts{help}  and pod2usage( -verbose => 1, -exitval => 0 );
 $opts{man}   and pod2usage( -verbose => 2, -exitval => 0 );
 $opts{debug} and $indexor->{DEBUG}=$opts{debug};
 $opts{proxy} and $indexor->proxy($opts{proxy});
 $opts{minW}  and $indexor->{'ConfigMoteur'}->{'nb_min_mots'} = $opts{minW};
 defined $opts{depth} and $indexor->{ConfigMoteur}{'niveau_max'} = $opts{depth};
-my $id = $opts{id};
+my $id = $opts{id} || 0;
+if (!$id) {
+  foreach (@need_id) {
+    $opts{$_} and pod2usage( -message => "Need id for $_",
+			     -verbose => 0,
+			     -exitval => 0 );
+  }
+}
 
 die "Erreur à la connection MySQL:$DBI::errstr\n"
   if (!$indexor->connect);
@@ -180,9 +188,22 @@ sub display {
 
 circa_admin - Update Circa search database
 
-=head1 SYNOSPIS
+=head1 SYNOPSIS
 
-circa_admin OPTIONS
+ circa_admin  --add --url=url --id=id
+              --add_account_prompt
+              --add_account --url=url
+              --clean --id=id
+              --create
+              --drop
+              --drop_id --id=id
+              --export
+              --exportId --id=id
+              --help
+              --import
+              --man
+              --stats --id=id
+              --parse_new --id=id
 
 =head1 DESCRIPTION
 
@@ -293,7 +314,7 @@ Parse and indexe url last added for account id
 
 Update url for account id last indexed nb_day ago
 
-=item B<--stats --id=id_account>
+=item B<--stats --id=>I<id_account>
 
 Give some stat about account id
 
@@ -331,7 +352,7 @@ L<Search::Circa::Indexer>
 
 =head1 VERSION
 
-$Revision: 1.5 $
+$Revision: 1.6 $
 
 =head1 AUTHOR
 

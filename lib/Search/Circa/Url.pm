@@ -10,7 +10,7 @@ require Exporter;
 
 @ISA = qw(Exporter);
 @EXPORT = qw();
-$VERSION = ('$Revision: 1.18 $ ' =~ /(\d+\.\d+)/)[0];
+$VERSION = ('$Revision: 1.19 $ ' =~ /(\d+\.\d+)/)[0];
 
 
 #------------------------------------------------------------------------------
@@ -53,7 +53,7 @@ sub add  {
   $requete.= ",browse_categorie ='$url{browse_categorie}'"
       if ($url{browse_categorie});
   #print $requete,"<br>\n";
-  $self->{INDEXER}->trace(3, $requete."\n");
+  $self->{INDEXER}->trace(4, $requete."\n");
   my $sth = $self->{DBH}->prepare($requete);
   if ($sth->execute) {
       $sth->finish;
@@ -106,7 +106,7 @@ sub update  {
   $requete.="  where id=$url{id}"; 
 #  print $requete;
 
-  $self->{INDEXER}->trace(3, $requete."\n");
+  $self->{INDEXER}->trace(4, $requete."\n");
   my $r = $self->{DBH}->do($requete) || return undef;
 #  print "$requete $DBI::errstr\n" if (!$r or $r eq '0E0');
   return ((!$r or $r eq '0E0') ? 0 : 1);
@@ -307,7 +307,7 @@ Search::Circa::Url - provide functions to manage url of Circa
 
 =head1 VERSION
 
-$Revision: 1.18 $
+$Revision: 1.19 $
 
 =head1 SYNOPSIS
 

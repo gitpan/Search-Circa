@@ -2,7 +2,7 @@ package Search::Circa;
 
 # module Circa: provide general method for Circa
 # Copyright 2000 A.Barbet alian@alianwebserver.com.  All rights reserved.
-# $Date: 2002/12/29 13:55:16 $
+# $Date: 2003/01/02 12:10:25 $
 
 use DBI;
 use DBI::DBD;
@@ -17,7 +17,7 @@ require Exporter;
 
 @ISA = qw(Exporter);
 @EXPORT = qw();
-$VERSION = ('$Revision: 1.17 $ ' =~ /(\d+\.\d+)/)[0];
+$VERSION = ('$Revision: 1.18 $ ' =~ /(\d+\.\d+)/)[0];
 
 #------------------------------------------------------------------------------
 # new
@@ -114,17 +114,15 @@ sub start_classic_html
 #------------------------------------------------------------------------------
 sub trace  {
   my ($self, $level, $msg)=@_;
-  cluck if ($level >= 3 and $self->{DEBUG} >= $level);
+  cluck if ($level >= 5 and $self->{DEBUG} >= $level);
 
   if ($self->{DEBUG} >= $level) {
+    $msg= (' 'x(2*$level)).$msg;
     if ($msg) {
       if ($ENV{SERVER_NAME}) {
 	print STDERR $msg,"\n"; }
       else { print $msg,"\n"; }
     }
-    if ($ENV{SERVER_NAME}) {
-      print STDERR "\n"; }
-    else { print "\n"; }
   }
 }
 
@@ -204,7 +202,7 @@ sub prompt
 
 =head1 NAME
 
-Search::Circa - a Search Engine/Indexer running with Mysql
+Search::Circa - a Search Engine / Indexer running with Mysql
 
 =head1 DESCRIPTION
 
@@ -458,7 +456,7 @@ L<Search::Circa::Categorie>, Manage categorie of Circa
 
 =head1 VERSION
 
-$Revision: 1.17 $
+$Revision: 1.18 $
 
 =head1 AUTHOR
 

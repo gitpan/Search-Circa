@@ -4,6 +4,14 @@ package Search::Circa::Parser;
 # Copyright 2000 A.Barbet alian@alianwebserver.com.  All rights reserved.
 
 # $Log: Parser.pm,v $
+# Revision 1.27  2003/01/02 00:32:40  alian
+# Add url found with meta http-equiv refresh
+#
+# Revision 1.26  2002/12/31 09:58:52  alian
+# Use hash in place of list in look_at
+# Call analyse in each text call in place of global var TEXT
+# Update POD doc
+#
 # Revision 1.25  2002/12/29 14:35:10  alian
 # Some minor fixe suite to last update
 #
@@ -21,12 +29,6 @@ package Search::Circa::Parser;
 #
 # Revision 1.20  2002/12/27 12:55:43  alian
 # Use ref in analyse, update stopwords
-#
-# Revision 1.19  2002/08/19 10:16:11  alian
-# Update display of url indexed
-#
-# Revision 1.18  2002/08/17 18:19:02  alian
-# - Minor changes to all code suite to tests
 
 use strict;
 use URI::URL;
@@ -35,13 +37,13 @@ use DBI;
 use LWP::RobotUA;
 use Carp qw/cluck/;
 use vars qw(@ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $VERSION 
-	    %links %inside $TEXT $DESCRIPTION $KEYWORDS);
+	    %links %inside $RM $DESCRIPTION $KEYWORDS $facteur_full_text);
 
 require Exporter;
 
 @ISA = qw(Exporter);
 @EXPORT = qw();
-$VERSION = ('$Revision: 1.25 $ ' =~ /(\d+\.\d+)/)[0];
+$VERSION = ('$Revision: 1.27 $ ' =~ /(\d+\.\d+)/)[0];
 
 # stopwords
 my %bad = map {$_ => 1} qw (
@@ -96,38 +98,37 @@ fait faut fit fut huit ici ils jamais laquelle lequel lequels les lesquelles
 #------------------------------------------------------------------------------
 # new
 #------------------------------------------------------------------------------
-sub new 
-  {
-    my $class = shift;
-    my $self = {};
-    my $indexer = shift;
-    $indexer->trace(5, "Search::Circa::Parser::new\n");
-    bless $self, $class;
-    $self->{DBH} = $indexer->{DBH};
-    $self->{ConfigMoteur} = $indexer->{ConfigMoteur};
-    while (my ($n,$v)=each(%{$indexer->{ConfigMoteur}}))
-	{ $indexer->trace(4, "\t$n => $v"); }
-    $self->{INDEXER} = $indexer;
-    # Ce module n'est presque jamais installé !
-    # Evidemment cela demande une charge machine et un .so 
-    # compilé pour cet environnement. Ca fait peur aux admin
-    # ISP ! On encapsule donc l'appel, si on echoue, on previent que
-    # tout appel au parser se soldera par une utilisation d'un parseur basic
-    # sans handicaper le reste de l'application
-    # Il vous reste plus qu'a faire alors une install mysql/circa en local
-    # pour faire l'indexation, et exporter les resultats sur le serveur final.
-    $self->{_parser_ok}=1;
-    eval { require HTML::Parser };
-    if ($@ || $HTML::Parser::VERSION < 3.0)
-      {
-	warn "Module HTML-Parser 3.0 ou superieur requis pour ".
-	  "utiliser les fonctionnalités optimales du parser.($@)\n";
-	$self->{_parser_ok}=0;
-      }
-    else { use HTML::Entities; }    
-    $self->{INDEXER}->trace(1,"Parser::new");
-    return $self;
+sub new  {
+  my $class = shift;
+  my $self = {};
+  my $indexer = shift;
+  $indexer->trace(5, "Search::Circa::Parser::new\n");
+  bless $self, $class;
+  $self->{DBH} = $indexer->{DBH};
+  $self->{ConfigMoteur} = $indexer->{ConfigMoteur};
+  while (my ($n,$v)=each(%{$indexer->{ConfigMoteur}}))
+    { $indexer->trace(4, "\t$n => $v"); }
+  $self->{INDEXER} = $indexer;
+  $facteur_full_text = $self->{ConfigMoteur}->{'facteur_full_text'};
+  # Ce module n'est presque jamais installé !
+  # Evidemment cela demande une charge machine et un .so 
+  # compilé pour cet environnement. Ca fait peur aux admin
+  # ISP ! On encapsule donc l'appel, si on echoue, on previent que
+  # tout appel au parser se soldera par une utilisation d'un parseur basic
+  # sans handicaper le reste de l'application
+  # Il vous reste plus qu'a faire alors une install mysql/circa en local
+  # pour faire l'indexation, et exporter les resultats sur le serveur final.
+  $self->{_parser_ok}=1;
+  eval { require HTML::Parser };
+  if ($@ || $HTML::Parser::VERSION < 3.0) {
+    warn "Module HTML-Parser 3.0 ou superieur requis pour ".
+      "utiliser les fonctionnalités optimales du parser.($@)\n";
+    $self->{_parser_ok}=0;
   }
+  else { use HTML::Entities; }
+  $self->{INDEXER}->trace(1,"Parser::new");
+  return $self;
+}
 
 #------------------------------------------------------------------------------
 # tag
@@ -135,16 +136,19 @@ sub new
 sub tag {
   my($tag, $num, $att) = @_; # parametre
   # Liens exterieurs
-  if (($tag eq 'a') and ($$att{href})) {$links{$$att{href}}=1;}
+  if ((lc($tag) eq 'a') and ($$att{href})) {$links{$$att{href}}=1;}
   # Frame
-  elsif (($tag eq 'frame') and ($$att{src})) {$links{$$att{src}}=1;}
+  elsif ((lc($tag) eq 'frame') and ($$att{src})) {$links{$$att{src}}=1;}
   # On est dans le cas d'un meta
-  elsif ($tag eq 'meta' and defined(%$att)) {
-    if ($$att{name} and lc($$att{name}) eq 'description') # Description
-	{$DESCRIPTION =$$att{content};}
+  elsif (lc($tag) eq 'meta' and defined(%$att)) {
+    if ($$att{name} and lc($$att{name}) eq 'description') {# Description
+      $DESCRIPTION =$$att{content};}
     elsif ((lc($$att{'http-equiv'}) eq 'keywords') or
-	   (lc($$att{name}) eq 'keywords'))# Mots-clefs
-      {$KEYWORDS=$$att{content} ;}
+	   (lc($$att{name}) eq 'keywords')) {# Mots-clefs
+      $KEYWORDS=$$att{content} ;}
+    elsif ((lc($$att{'http-equiv'}) eq 'refresh') and
+	   ($$att{content}=~/\d*;URL=(.*)$/)) {#url refresh
+      $links{$1}=1; }
   }
   # Area
   elsif (($tag eq 'area') and ($$att{href})) {$links{$$att{href}}=1;}
@@ -156,165 +160,172 @@ sub tag {
 #------------------------------------------------------------------------------
 sub text {
   return if $inside{script} || $inside{style};
-  $TEXT.=$_[0];
+  analyse($_[0], $facteur_full_text);
 }
 
 #------------------------------------------------------------------------------
 # look_at
 #------------------------------------------------------------------------------
 sub look_at {
-  my($this,$url,$idc,$idr,$lastModif,$url_local,$categorieAuto,
-     $niveau,$categorie) = @_;
-  undef %links; undef $TEXT; undef %inside;
-  $niveau = 0 if (!$niveau);
-  $categorie = 0 if (!$categorie);
-  my $buf_debug = "\tUrl => $url\n\tIdc => $idc\n";
-  $buf_debug.= "\tLast update => $lastModif" unless (!defined($lastModif));
-  $buf_debug.= "\tUrl local => $url_local" unless (!defined($url_local));
-  $this->{INDEXER}->trace(5, "Parser::look_at\n$buf_debug");
+  my($this, $rh)=@_;
+  # $url,$idc,$idr,$lastModif,$url_local,$categorieAuto,$niveau,$categorie
+  undef %links; $RM={}; undef %inside;
+  $rh->{niveau} = 0 if (!$rh->{niveau});
+  $rh->{categorie} = 0 if (!$rh->{categorie});
+  my $buf_debug = "\tUrl => $rh->{url}\n\tIdc => $rh->{idc}\n";
+  $buf_debug.= "\tLast update => $rh->{lastModif}" 
+    unless (!defined($rh->{lastModif}));
+  $buf_debug.= "\tUrl local => $rh->{url_local}"
+    unless (!defined($rh->{url_local}));
+  $this->{INDEXER}->trace(3, "Parser::look_at\n$buf_debug");
   my ($url_orig,$racineFile,$racineUrl,$lastUpdate);
-  my %jt;
-  my $l = \%jt;
-  if ($url_local or URI->new($url)->scheme eq 'file') {$this->set_agent(1);}
-  else {$this->set_agent(0);}
-  if ($url_local)
-    {
-      $this->{ConfigMoteur}->{'temporate'}=0;
-      if ($url_local=~/.*\/$/)
-	{
-	  chop($url_local);
-	  if (-e "$url_local/index.html") {$url_local.="/index.html";}
-	  elsif (-e "$url_local/index.htm") {$url_local.="/index.htm";}
-	  elsif (-e "$url_local/default.htm") {$url_local.="/default.htm";}
-	  else {return (-1,0,0);}
-	}
-      $url_orig=$url;
-      $url=$url_local;
-      ($racineFile,$racineUrl) = 
-	$this->{INDEXER}->fetch_first("select path,url from ".
-			 $this->{INDEXER}->pre_tbl."local_url where id=$idr");
+  if ($rh->{url_local} or URI->new($rh->{url})->scheme eq 'file') {
+    $this->set_agent(1);
+  } else {
+    $this->set_agent(0);
+  }
+  if ($rh->{url_local}) {
+    $this->{ConfigMoteur}->{'temporate'}=0;
+    if ($rh->{url_local}=~/.*\/$/) {
+      chop($rh->{url_local});
+      if (-e "$rh->{url_local}/index.html") {
+	$rh->{url_local}.="/index.html";}
+      elsif (-e "$rh->{url_local}/index.htm") {
+	$rh->{url_local}.="/index.htm";}
+      elsif (-e "$rh->{url_local}/default.htm") {
+	$rh->{url_local}.="/default.htm";}
+      else {return (-1,0,0);}
     }
-  my $x = 72-length($url);
-  if ( $this->{inindex}) {
-    print $this->{inindex},'/',$this->{toindex}," ",
-      $url,($ENV{SERVER_NAME} ? "<br>\n" : (" "x$x)."\n");
+    $url_orig=$rh->{url};
+    $rh->{url}=$rh->{url_local};
+    ($racineFile,$racineUrl) = 
+      $this->{INDEXER}->fetch_first("select path,url from ".
+				    $this->{INDEXER}->pre_tbl."local_url ".
+				    "where id=$rh->{idr}");
   }
   my ($nb,$nbwg,$nburl)=(0,0,0);
-  if ($url_local) {$this->{INDEXER}->set_host_indexed($url_local);}
-  else {$this->{INDEXER}->set_host_indexed($url);}
+  if ($rh->{url_local}) {$this->{INDEXER}->set_host_indexed($rh->{url_local});}
+  else {$this->{INDEXER}->set_host_indexed($rh->{url});}
 
   # Creation d'une requete
   # On passe la requete à l'agent et on attend le résultat
-  my $res = $this->{AGENT}->request(new HTTP::Request('GET' => $url));
+  my $res = $this->{AGENT}->request(new HTTP::Request('GET' => $rh->{url}));
+  $this->{INDEXER}->trace(2, "HTTP::Request return ".$res->status_line);
+  if ($res->is_success) {
+    # Langue
+    my $language = $res->content_language || 'unkno';
+    if ($rh->{lastModif}) {
+      $this->{INDEXER}->trace(2,"Update url ".$rh->{lastModif}.' '.
+			      $res->last_modified);
+    }
+    # Fichier non modifie depuis la derniere indexation
+    if (($rh->{lastModif}) && ($res->last_modified) &&
+	($rh->{lastModif} >= $res->last_modified)) {
+      $this->{INDEXER}->trace(1,"No update on $rh->{url}");
+      $this->{INDEXER}->URL->update
+	($rh->{idr},('id'=>$rh->{idc}, 'last_check'=>"NOW()"));
+      return (0,0,0);
+    }
+    if ($res->last_modified) {
+      my @date = localtime($res->last_modified);
+      $lastUpdate = ($date[5]+1900).'-'.($date[4]+1).'-'.
+	$date[3].' '.$date[2].':'.$date[1].':'.$date[0];
+    }
+    else {$lastUpdate='0000-00-00';}
+    my $x = 72-length($rh->{url});
+    if ( $this->{inindex}) {
+      print $this->{inindex},'/',$this->{toindex}," ",
+	$rh->{url},($ENV{SERVER_NAME} ? "<br>\n" : (" "x$x)."\n");
+    }
 
-  if ($res->is_success)
-    {
-      # Langue
-      my $language = $res->content_language || 'unkno';
-      # Fichier non modifie depuis la derniere indexation
-      if (($lastModif) && ($res->last_modified) &&
-	  ($lastModif > $res->last_modified))
-	{
-	  print "No update on $url<br>\n" if ($this->{DEBUG});
-	  $this->{INDEXER}->URL->update
-	    ($idr,('id'=>$idc, 
-		   'last_check'=>"NOW()"));
-	  return (0,0,0);
-	}
-      if ($res->last_modified)
-	{
-	  my @date = localtime($res->last_modified);
-	  $lastUpdate = ($date[5]+1900).'-'.($date[4]+1).'-'.
-	    $date[3].' '.$date[2].':'.$date[1].':'.$date[0];
-	}
-      else {$lastUpdate='0000-00-00';}
-      # Il serait judicieux de mettre ca dans le constructeur,
-      # mais cela entraine 10 Mo de Ram supplementaire à 
-      # l'utilisation. A voir avec les evolution du module
-      # HTML::Parser
-      if ($this->{_parser_ok})
-	{
-	  $this->{INDEXER}->trace(3,"Use HTML::Parser ...");
-	  my $parser = HTML::Parser->new
-	    (api_version => 3,
-	     handlers => [start => [\&tag, "tagname, '+1', attr"],
-			  end   => [\&tag, "tagname, '-1', attr"],
-			  text  => [\&text, "dtext"],
-			 ],
-	     marked_sections => 1);
-	  # parse du fichier
-	  $parser->parse($res->content)
-	    || print STDERR "Can't parse ".$res->content."::$!\n"; 
-	}
-      else
-	{
-	  $this->{INDEXER}->trace(1,"Use a basic parser ...");
-	  $TEXT = $res->content;
-	  $TEXT=~s{ <! (.*?) (--.*?--\s*)+(.*?)> } 
-	          {if ($1 || $3) {"<!$1 $3>";} }gesx;
-	  $TEXT=~s{ <(?: [^>\'\"] * | ".*?" | '.*?' ) + > }{}gsx;
-	  $TEXT=decode_entities($TEXT);
-	}
+    # Il serait judicieux de mettre ca dans le constructeur,
+    # mais cela entraine 10 Mo de Ram supplementaire à 
+    # l'utilisation. A voir avec les evolution du module
+    # HTML::Parser
+    if ($this->{_parser_ok}) {
+      $this->{INDEXER}->trace(3,"Use HTML::Parser ...");
+      my $parser = HTML::Parser->new
+	(api_version => 3,
+	 handlers => [start => [\&tag, "tagname, '+1', attr"],
+		      end   => [\&tag, "tagname, '-1', attr"],
+		      text  => [\&text, "dtext"],
+		     ],
+	 marked_sections => 1);
+      # parse du fichier
+      $parser->parse($res->content)
+	|| print STDERR "Can't parse ".$res->content."::$!\n"; 
+    }
+    else {
+      $this->{INDEXER}->trace(1,"Use a basic parser ...");
+      my $TEXT = $res->content;
+      $TEXT=~s{ <! (.*?) (--.*?--\s*)+(.*?)> } {
+	if ($1 || $3) {"<!$1 $3>";} }gesx;
+      $TEXT=~s{ <(?: [^>\'\"] * | ".*?" | '.*?' ) + > }{}gsx;
+      analyse(decode_entities($TEXT),
+	      $this->{ConfigMoteur}->{'facteur_full_text'});
+    }
 
-      # Mots clefs et description
-      my ($desc,$keyword)=($DESCRIPTION||' ',$KEYWORDS||' ');
-     undef $DESCRIPTION; undef $KEYWORDS; 
-      my $titre = $res->title || $url;# Titre
-      # Categorie
-      if ($categorieAuto) 
-	  {$categorie = $this->{INDEXER}->categorie->get($url,$idr);}
-      if (!$categorie) {$categorie=0;}
-      # Mis a jour de l'url
-      if ($this->{INDEXER}->URL->update
-	    ($idr,
-	     (parse        => 1,
-		id           => $idc,
-		titre        => $titre,
-		description  => $desc,
-		last_update  => $lastUpdate,
-		last_check   => 'NOW()',
-		langue       => $language,
-		categorie    => $categorie
-	     )
-	    )) { $this->{INDEXER}->trace(2, "$url mis à jour avec success"); }
+    # Mots clefs et description
+    my ($desc,$keyword)=($DESCRIPTION||' ',$KEYWORDS||' ');
+    undef $DESCRIPTION; undef $KEYWORDS; 
+    my $titre = $res->title || $rh->{url};# Titre
+    # Categorie
+    if ($rh->{categorieAuto}) {
+      $rh->{categorie} = $this->{INDEXER}->categorie->get($rh->{url},
+							  $rh->{idr});
+    }
+    if (!$rh->{categorie}) {$rh->{categorie}=0;}
+    # Mis a jour de l'url
+    if ($this->{INDEXER}->URL->update
+	($rh->{idr},
+	 (parse        => 1,
+	  id           => $rh->{idc},
+	  titre        => $titre,
+	  description  => $desc,
+	  last_update  => $lastUpdate,
+	  last_check   => 'NOW()',
+	  langue       => $language,
+	  categorie    => $rh->{categorie}
+	 )
+	)) {
+      $this->{INDEXER}->trace(2, "$rh->{url} mis à jour avec success");
+    }
 
-      # Traitement des mots trouves
-      $l=analyse($keyword,$this->{ConfigMoteur}->{'facteur_keyword'},$l);
-      $l=analyse($desc,$this->{ConfigMoteur}->{'facteur_description'},$l);
-      $l=analyse($titre,$this->{ConfigMoteur}->{'facteur_titre'},$l);
-      $l=analyse($TEXT,$this->{ConfigMoteur}->{'facteur_full_text'},$l);
-      $l=analyse($url,$this->{ConfigMoteur}->{'facteur_url'},$l);
-      $this->{INDEXER}->dbh->do
-	("delete from ".$this->{INDEXER}->pre_tbl.$idr."relation ".
-		       "where id_site = $idc");
-      undef $TEXT;
+    # Traitement des mots trouves
+    analyse($keyword,$this->{ConfigMoteur}->{'facteur_keyword'});
+    analyse($desc,$this->{ConfigMoteur}->{'facteur_description'});
+    analyse($titre,$this->{ConfigMoteur}->{'facteur_titre'});
+    analyse($rh->{url},$this->{ConfigMoteur}->{'facteur_url'});
+    $this->{INDEXER}->dbh->do
+      ("delete from ".$this->{INDEXER}->pre_tbl.$rh->{idr}."relation ".
+       "where id_site = $rh->{idc}");
 
-      # Chaque mot trouve plus de $ConfigMoteur{'nb_min_mots'} fois
-      # est enregistre
-      # On passe cette etape si le nombre de liens de la page est superieur
-      # a 50% le nombre de mots retenus, il s'agit alors
-      # d'un sommaire peut interessant à consulter
-      my $nbw = 0;
-      if (scalar keys %links < (( scalar keys %$l) * 0.5)) {
-	while (my ($mot,$nb)=each(%$l)) {
-	  next if (!$nb or $nb < $this->{'ConfigMoteur'}->{'nb_min_mots'});
-	  my $requete = "insert into ".
-	    $this->{INDEXER}->pre_tbl.$idr.
-	        "relation (mot,id_site,facteur) ".
-		"values ('$mot',$idc,$nb)";
-	  $this->{INDEXER}->dbh->do($requete) && $nbwg++;
-	  $this->{INDEXER}->trace(3,"\t\tStore words: ".$requete);
-	}
-	$nbw=keys %$l;
+    # Chaque mot trouve plus de $ConfigMoteur{'nb_min_mots'} fois
+    # est enregistre
+    # On passe cette etape si le nombre de liens de la page est superieur
+    # a 50% le nombre de mots retenus, il s'agit alors
+    # d'un sommaire peut interessant à consulter
+    my $nbw = 0;
+    if (scalar keys %links < (( scalar keys %$RM) * 0.5)) {
+      while (my ($mot,$nb)=each(%$RM)) {
+	next if (!$nb or $nb < $this->{'ConfigMoteur'}->{'nb_min_mots'});
+	my $requete = "insert into ".
+	  $this->{INDEXER}->pre_tbl.$rh->{idr}.
+	    "relation (mot,id_site,facteur) ".
+	      "values ('$mot',$rh->{idc},$nb)";
+	$this->{INDEXER}->dbh->do($requete) && $nbwg++;
+	$this->{INDEXER}->trace(4,"\t\tStore words: ".$requete);
       }
-      else {
- 	$this->{INDEXER}->trace
-	  (1,"Sommaire - ".(scalar keys %$l).
-	     " mots ignores pour ".(scalar keys %links)." liens");
-      }
+      $nbw=keys %$RM;
+    }
+    else {
+      $this->{INDEXER}->trace
+	(1,"Sommaire - ".(scalar keys %$RM).
+	 " mots ignores pour ".(scalar keys %links)." liens");
+    }
 
       # On n'indexe pas les liens si on est au niveau max
-      if ($niveau == $this->{ConfigMoteur}{'niveau_max'}) {
+      if ($rh->{niveau} == $this->{ConfigMoteur}{'niveau_max'}) {
 	$this->{INDEXER}->trace(1,"Niveau max atteint. Liens suivants de ". 
 				"cette page ignorés<br>");
 	return (0,0,0);
@@ -326,19 +337,19 @@ sub look_at {
       foreach my $var (@l) {
 	$var = url($var,$base)->abs; # Url absolu
 	$var = $this->check_links('a',$var);
-	if (($url_local) && ($var)) {
+	if (($rh->{url_local}) && ($var)) {
 	  my $urlb = $var;
 	  $urlb=~s/$racineFile/$racineUrl/g;
 	  #print h1("Ajout site local:$$var[2] pour $racineFile");
 	  $this->{INDEXER}->trace(2, "\t".$urlb);
 	  if ($this->{INDEXER}->URL->add
-	      ($idr,
+	      ($rh->{idr},
 	       (url       => $urlb, 
 		urllocal  => $var,
-		niveau    => $niveau+1,
-		categorie => $categorie,
+		niveau    => $rh->{niveau}+1,
+		categorie => $rh->{categorie},
 		valide    => 1,
-		browse_categorie=>$categorieAuto)))
+		browse_categorie=>$rh->{categorieAuto})))
 	    { $nburl++; }
 	  else {$this->{INDEXER}->trace
 		  (2,"\tCan't add $urlb:\n\t$DBI::errstr");}
@@ -346,10 +357,10 @@ sub look_at {
 	elsif ($var) {
 	  $this->{INDEXER}->trace(2, "\t".$var);
 	  if ($this->{INDEXER}->URL->add
-	      ($idr,
+	      ($rh->{idr},
 	       (url       => $var,
-		niveau    => $niveau+1,
-		categorie => $categorie,
+		niveau    => $rh->{niveau}+1,
+		categorie => $rh->{categorie},
 		valide => 1)))
 	    { $nburl++; }
 	  else 
@@ -361,7 +372,7 @@ sub look_at {
       return ($nburl,$nbw,$nbwg);
     }
   # Sinon previent que URL defectueuse
-  else { print "*** ", $res->code," : $url\n";return (-1,0,0);}
+  else { print "*** ", $res->code," : $rh->{url}\n";return (-1,0,0);}
 }
 
 #------------------------------------------------------------------------------
@@ -391,11 +402,8 @@ sub set_agent
 sub analyse  {
   my $data = shift;
   my $facteur = shift;
-  return if (!@_);
-  my ($l,$e);
-  if (ref($_[0])) { $l= shift; }
-  else {my %l; cluck "What's that ?";%l = @_; $l=\%l; }
-  return $l if (!$data or !$facteur);
+  my $e;
+  return if (!$data or !$facteur);
   # Ponctuation et mots recurents
   $data=~s/http:\/\// /gm;
   $data=~tr/\n\t<>.;:,?!()\"\'[]#=\/_/ /;
@@ -403,10 +411,9 @@ sub analyse  {
   foreach (split(/\s/,$data)) {
     next if !$_;
     $e=lc($_);
-    $$l{$e}+=$facteur
+    $$RM{$e}+=$facteur
       if (($e =~/\w/)&&(length($e)>2)&&(!$bad{$e})&&($e !~/^\d*$/));
   }
-  return $l;
 }
 
 #------------------------------------------------------------------------------
@@ -445,7 +452,8 @@ Search::Circa::Parser - provide functions to parse HTML pages by Circa
       use Search::Circa::Indexer;
       my $index = new Search::Circa::Indexer;
       $index->connect(...);
-      $index->Parser->look_at($url,account);
+      $index->Parser->look_at({ url => url,
+				idr => account });
 
 =head1 DESCRIPTION
 
@@ -460,8 +468,7 @@ for index each document. Main method is C<look_at>.
 
 Create a new Circa::Parser object with indexer instance properties
 
-=item B<look_at> I<url, idc, idr, lastModif, url_local,
-                categorieAuto, niveau, categorie>
+=item B<look_at> I<refHash>
 
 Index an url. Job done is:
 
@@ -482,48 +489,46 @@ indexation
 
 =back
 
-Parameters:
+Keys for refHashParameters:
 
 =over
 
-=item *
+=item I<url>
 
-$url : Url to read
+Url to read
 
-=item *
+=item I<idc>
 
-$idc: Id of url in table links
+Id of url in table links
 
-=item *
+=item I<idr>
 
-$idr : Id of account's url
+Id of account's url
 
-=item *
+=item I<lastModif>
 
-$lastModif (optional) : If this parameter is set, Circa didn't make any job
+(optional) : If this parameter is set, Circa didn't make any job
 on this page if it's older that the date.
 
-=item *
+=item I<url_local>
 
-$url_local (optional) Local url to reach the file
+(optional) Local url to reach the file
 
-=item *
+=item I<categorieAuto>
 
-$categorieAuto (optional) If $categorieAuto set to true, Circa will
+(optional) If $categorieAuto set to true, Circa will
 create/set the category of url with syntax of directory found. Ex:
-
 http://www.alianwebserver.com/societe/stvalentin/index.html will create
-and set the category for this url to Societe / StValentin
-
+and set the category for this url to Societe / StValentin.
 If $categorieAuto set to false, $categorie will be used.
 
-=item *
+=item I<niveau>
 
-$niveau (optional) Level of actual link.
+(optional) Depth of actual link.
 
-=item *
+=item I<categorie>
 
-$categorie (optional) See $categorieAuto.
+(optional) See $categorieAuto.
 
 =back
 
@@ -536,28 +541,22 @@ Set user agent for Circa robot. If local is set to 0 or
 $self->{ConfigMoteur}->{'temporate'}==0,
 LWP::UserAgent will be used. Else LWP::RobotUA is used.
 
-=item B<analyse> I<data, facteur, ref_hash>
+=item B<analyse> I<data, facteur>
 
-Split data in words, and put in in %$ref_hash with score
+Split data in words, and put them in global %$RM with score.
 Hash structure is ('mots'=>facteur).
 
 =over
 
-=item *
+=item I<data>
 
-data : buffer à analyser
+Buffer to analyse
 
-=item *
+=item I<facteur>
 
-$facteur : facteur à attribuer à chacun des mots trouvés
-
-=item *
-
-%l : Tableau associatif où est rangé le résultat
+Basic score for each word
 
 =back
-
-Return ref_hash
 
 =item B<tag>
 
@@ -579,7 +578,7 @@ If $links is accepted, return url. Else return 0.
 
 =head1 VERSION
 
-$Revision: 1.25 $
+$Revision: 1.27 $
 
 =head1 SEE ALSO
 

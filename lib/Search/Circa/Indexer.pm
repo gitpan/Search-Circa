@@ -4,6 +4,12 @@ package Search::Circa::Indexer;
 # Copyright 2000 A.Barbet alian@alianwebserver.com.  All rights reserved.
 
 # $Log: Indexer.pm,v $
+# Revision 1.39  2003/01/02 12:07:48  alian
+# Rewrite set_host_indexed method, update POD doc
+#
+# Revision 1.38  2002/12/31 09:59:36  alian
+# Update call of look_at to use hash in place of list
+#
 # Revision 1.37  2002/12/29 14:35:09  alian
 # Some minor fixe suite to last update
 #
@@ -32,7 +38,7 @@ require Exporter;
 
 @ISA = qw(Exporter Search::Circa);
 @EXPORT = qw();
-$VERSION = ('$Revision: 1.37 $ ' =~ /(\d+\.\d+)/)[0];
+$VERSION = ('$Revision: 1.39 $ ' =~ /(\d+\.\d+)/)[0];
 
 # Path of mysql binary
 my @path_mysql = qw!/usr/bin /usr/local/bin /opt/bin /opt/local/bin 
@@ -118,16 +124,15 @@ sub host_indexed  {
 #------------------------------------------------------------------------------
 # set_host_indexed
 #------------------------------------------------------------------------------
-sub set_host_indexed
-  {
-    my $this=shift;
-    my $url=$_[0];
-    $this->trace(5, "Circa::Indexer::set_host_indexed $url");
-    if ($url=~/^(http:\/\/.*?)\/$/) {$this->host_indexed($1);}
-    elsif ($url=~/^(http:\/\/.*?)\/[^\/]+$/) {$this->host_indexed($1);}
-    elsif ($url=~/^(file:\/\/\/[^\/]*)\//) {$this->host_indexed($1);}
-    else {$this->host_indexed($url);}
-  }
+sub set_host_indexed {
+  my $this=shift;
+  my $url=$_[0];
+  $this->trace(3, "Circa::Indexer::set_host_indexed $url");
+  if ($url=~m!^(http://[^/]*)!) {$this->host_indexed($1);}
+  elsif ($url=~m!^(http://[^/]*)!) {$this->host_indexed($1);}
+  elsif ($url=~m!^(file:///[^/]*)!) {$this->host_indexed($1);}
+  else {$this->host_indexed($url);}
+}
 
 #------------------------------------------------------------------------------
 # proxy
@@ -189,29 +194,31 @@ values ('$rc->{email}',
 #------------------------------------------------------------------------------
 # parse_new_url
 #------------------------------------------------------------------------------
-sub parse_new_url
-  {
-    my ($self,$idp)=@_; 
-    print "Indexer::parse_new_url\n" if ($self->{DEBUG});
-    my ($nb,$nbAjout,$nbWords,$nbWordsGood)=(0,0,0,0);
-    my $tab = $self->URL->need_parser($idp);
-    my $categorieAuto = $self->categorie->auto($idp);
+sub parse_new_url  {
+  my ($self,$idp)=@_; 
+  print "Indexer::parse_new_url\n" if ($self->{DEBUG});
+  my ($nb,$nbAjout,$nbWords,$nbWordsGood)=(0,0,0,0);
+  my $tab = $self->URL->need_parser($idp);
+  my $categorieAuto = $self->categorie->auto($idp);
   $self->Parser->{toindex} = scalar keys %{$tab};
   $self->Parser->{inindex} =  0;
 
-    foreach my $id (keys %$tab) 
-      {
+  foreach my $id (keys %$tab) {
     $self->Parser->{inindex}++;
-	my ($url,$local_url,$niveau,$categorie,$lu)=$$tab{$id};
-	my ($res,$nbw,$nbwg) = 
-	  $self->Parser->look_at
-	    ($$tab{$id}[0],$id,$idp,undef, ($$tab{$id}[1]||undef),
-	     $categorieAuto, $$tab{$id}[2], $$tab{$id}[3]);
-	if ($res==-1) {$self->URL->non_valide($idp,$id);}
-	else {$nbAjout+=$res;$nbWords+=$nbw;$nb++;$nbWordsGood+=$nbwg;}
-      }  
-    return ($nb,$nbAjout,$nbWords,$nbWordsGood);
+    my ($url,$local_url,$niveau,$categorie,$lu)=$$tab{$id};
+    my ($res,$nbw,$nbwg) =
+      $self->Parser->look_at({ url           => $$tab{$id}[0],
+			       idc           => $id,
+			       idr           => $idp,
+			       url_local     => $$tab{$id}[1] || undef,
+			       categorieAuto => $categorieAuto,
+			       niveau        => $$tab{$id}[2],
+			       categorie     => $$tab{$id}[3]});
+    if ($res==-1) {$self->URL->non_valide($idp,$id);}
+    else {$nbAjout+=$res;$nbWords+=$nbw;$nb++;$nbWordsGood+=$nbwg;}
   }
+  return ($nb,$nbAjout,$nbWords,$nbWordsGood);
+}
 
 
 #------------------------------------------------------------------------------
@@ -220,7 +227,7 @@ sub parse_new_url
 sub update {
   my ($this,$xj,$idp)=@_;
   $idp = 1 if (!$idp);
-  $this->parse_new_url($idp);  
+  $this->parse_new_url($idp);
   my ($nb,$nbAjout,$nbWords,$nbWordsGood)=(0,0,0,0);
   my $tab = $this->URL->need_update($idp,$xj);
   my $categorieAuto = $this->categorie->auto($idp);
@@ -230,9 +237,14 @@ sub update {
     $this->Parser->{inindex}++;
     my ($url,$local_url,$niveau,$categorie,$lu) = $$tab{$id};
     my ($res,$nbw,$nbwg) = 
-      $this->Parser->look_at($$tab{$id}[0],$id,$idp,
-			       $$tab{$id}[4] || undef, $$tab{$id}[1] ||undef,
-			     $categorieAuto, $$tab{$id}[2], $$tab{$id}[3]);
+      $this->Parser->look_at( { url           => $$tab{$id}[0],
+				idc           => $id,
+				idr           => $idp,
+				lastModif     => $$tab{$id}[4] || undef,
+				url_local     => $$tab{$id}[1] ||undef,
+				categorieAuto => $categorieAuto,
+				niveau        => $$tab{$id}[2],
+				categorie     => $$tab{$id}[3]});
     if ($res==-1) {$this->URL->non_valide($idp,$id);}
     else {$nbAjout+=$res;$nbWords+=$nbw;$nb++;$nbWordsGood+=$nbwg;}
   }
@@ -1023,31 +1035,31 @@ Drop all table in Circa ! Be careful ! - Detruit touted les tables de Circa
 
 =item B<drop_table_circa_id> I<id account>
 
-Detruit les tables de Circa pour l'utilisateur $id
+Drop table for account I<id account>
 
 =cut
 
 =item B<create_table_circa_id> I<id account>
 
-Create tables needed by Circa for instance $id:
+Create tables needed by Circa for account I<id account>
 
 =over
 
-=item *
+=item categorie
 
-categorie   : Catégories de sites
+Catégories de sites
 
-=item *
+=item links
 
-links       : Liste d'url
+Liste d'url
 
-=item *
+=item relations
 
-relations   : Liste des mots / id site indexes
+Liste des mots / id site indexes
 
-=item *
+=item stats
 
-stats   : Liste des requetes
+Liste des requetes
 
 =back
 
@@ -1080,39 +1092,38 @@ If not given, read it from $CircaConf::export, else /tmp directory.
 
 =item B<admin_compte> I<id account>
 
-Return list about account $compte
-
-Retourne une liste d'elements se rapportant au compte $compte
+Return hash with some informations account I<id account>
+Keys are:
 
 =over
 
-=item *
+=item responsable
 
-$responsable  : Adresse mail du responsable
+Email address given with account creation
 
-=item *
+=item titre
 
-$titre    : Titre du site pour ce compte
+Title given with account creation
 
-=item *
+=item nb_links
 
-$nb_page  : Number of url added to Circa - Nombre de page pour ce site
+Number of url for this account
 
-=item *
+=item nb_words
 
-$nb_words : Number of world added to Circa - Nombre de mots indexés
+Number of world stored
 
-=item *
+=item last_index
 
-$last_index  : Date of last indexation. Date de la dernière indexation
+Date of last index process
 
-=item *
+=item nb_request
 
-$nb_requetes  : Number of request aked - Nombre de requetes effectuées sur ce site
+Number of request asked
 
-=item *
+=item racine
 
-$racine  : First page added - 1ere page inscrite
+Url given with account creation
 
 =back
 
@@ -1135,35 +1146,30 @@ Inscrit un site dans une table temporaire
 
 =over
 
-=item B<header_compte>
+=item B<header_compte> I<CGI object, id account, url of script>
 
 Function use with CGI admin_compte.cgi. Display list of features of 
-admin_compte.cgi with this account
+admin_compte.cgi for this account
 
 =item B<get_liste_liens> I<id account>
 
-Rend un buffer contenant une balise select initialisée avec les données
-de la table links responsable $id
+Return a html select buffer with list of url for account I<id account>
 
-=item B<get_liste_liens_a_valider> I<id account>
+=item B<get_liste_liens_a_valider> I<id account>,I<CGI object>
 
-Rend un buffer contenant une balise select initialisée avec les données
-de la table links responsable $id liens non valides
+Return a html select buffer with link to valid for account I<id account>
 
-=item B<get_liste_site>
+=item B<get_liste_site> I<cgi object>
 
-Rend un buffer contenant une balise select initialisée avec les données
-de la table responsable
+Return a html select buffer with list of account
 
-=item B<get_liste_langues>
+=item B<get_liste_langues> I<id account, default value, CGI object>
 
-Rend un buffer contenant une balise select initialisée avec les données
-de la table responsable
+Return a html select buffer with distinct known languages found at index time
 
-=item B<get_liste_mot>
+=item B<get_liste_mot> I<id account>, I<id url>
 
-Rend un buffer contenant une balise select initialisée avec les données
-de la table responsable
+Return a html buffer with words found at index time for url I<id url>.
 
 =back
 
@@ -1177,7 +1183,7 @@ L<circa_admin>, command line to use indexer
 
 =head1 VERSION
 
-$Revision: 1.37 $
+$Revision: 1.39 $
 
 =head1 AUTHOR
 
